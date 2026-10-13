@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, user-scalable=no, viewport-fit=cover"
+    />
+    <title>Doge Rescue Run</title>
+    <link rel="stylesheet" href="/css/style.css" />
+  </head>
+  <body>
+    <div class="stage">
+      <canvas id="game"></canvas>
+      <canvas id="hud"></canvas>
+
+      <section id="career" class="career-menu" aria-label="Rescue routes and garage">
+        <div class="career-card">
+          <p class="career-kicker">DOGE RESCUE RUN</p>
+          <h1>Choose your route</h1>
+          <p class="career-note">Your Doge City surroundings stay the same on every route.</p>
+          <div class="career-route">
+            <label>World<select id="world-select"></select></label>
+            <label>Level<select id="level-select"></select></label>
+          </div>
+          <div class="career-wallet">🪙 <span id="coin-bank">0</span> coins</div>
+          <div class="garage-list" id="garage-list"></div>
+          <p id="career-message" class="career-message" aria-live="polite">Collect coins on the road to upgrade your van.</p>
+          <button id="drive-route" class="career-start" type="button">Start rescue run</button>
+        </div>
+      </section>
+
+      <div class="controls">
+      <button id="pause" class="pause-btn is-hidden" type="button" aria-label="Pause run">Ⅱ</button>
+      <button id="jump" class="action-btn action-btn--jump is-hidden" type="button" aria-label="Jump over a road obstacle">JUMP</button>
+      <div class="drive-controls">
+          <button id="horn" class="action-btn action-btn--horn" type="button" aria-label="Hold to honk">HORN</button>
+          <button id="brake" class="action-btn action-btn--brake" type="button">BRAKE</button>
+          <button id="speed" class="action-btn action-btn--speed" type="button">GAS</button>
+        </div>
+      </div>
+    </div>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>

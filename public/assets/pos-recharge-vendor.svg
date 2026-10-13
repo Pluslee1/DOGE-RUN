@@ -1,0 +1,54 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <rect width="1024" height="1024" fill="#9a9a9a"/>
+  <ellipse cx="514" cy="849" rx="294" ry="60" fill="#777" opacity=".48"/>
+
+  <!-- low-poly parasol canopy -->
+  <path d="M214 350 Q512 107 810 350 L752 393 L690 366 L630 402 L570 370 L512 408 L450 372 L390 404 L326 369 L268 396Z" fill="#e3262e" stroke="#67252a" stroke-width="5" stroke-linejoin="round"/>
+  <path d="M214 350 Q270 286 329 250 L326 369 L268 396Z" fill="#ffd23e"/>
+  <path d="M329 250 Q390 207 452 181 L450 372 L390 404 L326 369Z" fill="#e3262e"/>
+  <path d="M452 181 Q512 164 572 181 L570 370 L512 408 L450 372Z" fill="#ffd23e"/>
+  <path d="M572 181 Q635 205 696 251 L690 366 L630 402 L570 370Z" fill="#e3262e"/>
+  <path d="M696 251 Q754 286 810 350 L752 393 L690 366Z" fill="#ffd23e"/>
+  <path d="M214 350 Q512 395 810 350" fill="none" stroke="#74262a" stroke-width="8"/>
+  <path d="M512 176 L512 698" stroke="#604a39" stroke-width="15"/>
+  <path d="M500 187 L512 176 L524 187 L518 204 L506 204Z" fill="#e6d7b5"/>
+
+  <!-- table frame -->
+  <path d="M317 530 L690 530 L690 571 L317 571Z" fill="#765033"/>
+  <path d="M317 530 L690 530 L651 552 L278 552Z" fill="#b37a48"/>
+  <path d="M337 557 L359 557 L350 756 L328 756Z" fill="#65432e"/>
+  <path d="M646 557 L668 557 L681 756 L659 756Z" fill="#65432e"/>
+  <path d="M349 588 L658 588 L664 611 L348 611Z" fill="#8d603b"/>
+  <path d="M348 611 L364 611 L364 741 L348 741Z" fill="#704b33"/>
+  <path d="M647 611 L664 611 L664 741 L647 741Z" fill="#704b33"/>
+
+  <!-- small POS terminal -->
+  <path d="M455 445 L522 428 L560 451 L560 516 L493 535 L455 513Z" fill="#24282c" stroke="#151719" stroke-width="5"/>
+  <path d="M455 445 L522 428 L522 493 L455 513Z" fill="#41484d"/>
+  <path d="M465 453 L513 441 L513 472 L465 485Z" fill="#87c9bc"/>
+  <path d="M468 493 L506 483 L506 491 L468 501Z" fill="#d8d5c8"/>
+  <circle cx="474" cy="508" r="3.5" fill="#f4d65a"/><circle cx="486" cy="504" r="3.5" fill="#d9d9d9"/><circle cx="498" cy="501" r="3.5" fill="#d9d9d9"/>
+
+  <!-- colorful recharge scratch-card stack -->
+  <path d="M570 474 L641 459 L672 476 L600 494Z" fill="#e8c535" stroke="#765b17" stroke-width="3"/>
+  <path d="M570 474 L600 494 L600 503 L570 485Z" fill="#c69e23"/>
+  <path d="M600 494 L672 476 L672 486 L600 503Z" fill="#ad841a"/>
+  <path d="M583 458 L650 443 L676 458 L608 477Z" fill="#45a6a2" stroke="#286b6d" stroke-width="3"/>
+  <path d="M583 458 L608 477 L608 486 L583 468Z" fill="#338386"/>
+  <path d="M608 477 L676 458 L676 468 L608 486Z" fill="#267273"/>
+  <path d="M595 441 L653 428 L680 443 L621 460Z" fill="#e86a42" stroke="#9e3e2b" stroke-width="3"/>
+  <path d="M606 444 L654 433" stroke="#ffe9b6" stroke-width="4"/>
+
+  <!-- plastic stool -->
+  <path d="M728 647 L829 635 L861 654 L760 669Z" fill="#17878a"/>
+  <path d="M728 647 L760 669 L760 692 L728 669Z" fill="#126b70"/>
+  <path d="M760 669 L861 654 L861 676 L760 692Z" fill="#0d5d62"/>
+  <path d="M741 674 L757 671 L752 776 L736 779Z" fill="#126b70"/>
+  <path d="M836 660 L852 658 L860 766 L844 769Z" fill="#126b70"/>
+  <path d="M754 699 L846 685 L848 702 L755 716Z" fill="#23999a"/>
+  <path d="M740 775 L754 773 L751 785 L736 787Z M843 765 L859 762 L861 775 L844 778Z" fill="#124f53"/>
+
+  <!-- faceted highlights and graphic grounding -->
+  <path d="M214 350 Q512 107 810 350 L786 355 Q512 145 238 356Z" fill="#fff" opacity=".12"/>
+  <path d="M316 529 L690 529 L671 540 L298 540Z" fill="#d6a06a" opacity=".4"/>
+</svg>
