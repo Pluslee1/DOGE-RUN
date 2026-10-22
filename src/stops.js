@@ -26,8 +26,28 @@ export function updateStopSystem(game, dt, buttons) {
   stops.zones = stops.zones.filter((zone) => (
     zone.state === 'upcoming'
     || zone.state === 'active'
-    || zone.endZ >= game.distance - CONFIG.stops.zoneLengthMeters
+    || (zone.state === 'missed'
+      && zone.endZ >= game.distance - CONFIG.stops.reverseRecoveryMeters)
+    || (zone.state === 'completed'
+      && zone.endZ >= game.distance - CONFIG.stops.zoneLengthMeters)
   ));
+
+  if (game.vanSpeed < 0) {
+    const recoverableZone = [...stops.zones].reverse().find((item) => (
+      item.state === 'missed'
+      && game.distance <= item.endZ + CONFIG.stops.reverseRecoveryMeters
+    ));
+    if (recoverableZone) {
+      recoverableZone.state = 'upcoming';
+      recoverableZone.recovered = true;
+      recoverableZone.dwellTimer = 0;
+      recoverableZone.dwellReady = false;
+      recoverableZone.dwellStartedElapsed = null;
+      stops.missed = Math.max(0, stops.missed - 1);
+    }
+  }
+
+  syncShelterStop(game);
 
   const zone = stops.zones.find((item) => item.state === 'upcoming' || item.state === 'active');
   if (!zone) {
@@ -37,6 +57,12 @@ export function updateStopSystem(game, dt, buttons) {
 
   if (game.distance > zone.endZ) {
     zone.dwellTimer = 0;
+    zone.dwellReady = false;
+    zone.dwellStartedElapsed = null;
+    if (game.vanSpeed < 0) {
+      fillUpcomingZones(stops);
+      return;
+    }
     if (zone.state !== 'completed') {
       zone.state = 'missed';
       stops.missed += 1;
@@ -71,7 +97,16 @@ export function updateStopSystem(game, dt, buttons) {
       }
     }
 
-    if (zone.dwellReady && zone.dogsSpawned && zone.dogCount > 0 && zone.dogsBoarded >= zone.dogCount) {
+    if (zone.isShelter) {
+      if (zone.dwellReady && !game.shelterUnloading && game.onboardDogs > 0) {
+        beginShelterUnload(game, zone);
+      }
+      if (game.shelterUnloading?.zoneIndex === zone.index
+        && game.shelterUnloading.dispatched >= game.shelterUnloading.total
+        && game.shelterUnloading.dogsRemaining <= 0) {
+        completeShelterDrop(game, zone);
+      }
+    } else if (zone.dwellReady && zone.dogsSpawned && zone.dogCount > 0 && zone.dogsBoarded >= zone.dogCount) {
       completeStop(game, zone);
     }
   }
@@ -92,8 +127,10 @@ function createZone(index) {
     name: config.names[index % config.names.length],
     index,
     lane: CONFIG.lanes.count - 1,
+    isShelter: false,
     state: 'upcoming',
     dogsSpawned: false,
+    recovered: false,
     dogCount: 0,
     dogsBoarded: 0,
     dwellReady: false,
@@ -101,6 +138,55 @@ function createZone(index) {
     enteredAtElapsed: null,
     dwellStartedElapsed: null,
   };
+}
+
+function syncShelterStop(game) {
+  if (game.onboardDogs < CONFIG.shelter.capacity) return;
+  game.shelterDue = true;
+  const nextZone = game.stops.zones.find((zone) => zone.state === 'upcoming');
+  if (nextZone) nextZone.isShelter = true;
+}
+
+function beginShelterUnload(game, zone) {
+  const total = game.carriedDogColors?.length || game.onboardDogs;
+  game.shelterUnloading = {
+    zoneIndex: zone.index,
+    total,
+    dispatched: 0,
+    dogsRemaining: total,
+    spawnTimer: CONFIG.shelter.unloadSpawnSeconds,
+    targetX: CONFIG.road.right + CONFIG.shelter.unloadDoorOffsetPx,
+    targetY: game.van.y
+      - (((zone.startZ + zone.endZ) / 2 - game.distance) * CONFIG.distance.pixelsPerMeter)
+      + CONFIG.shelter.unloadForwardOffsetPx,
+  };
+  game.parking.unloadingInProgress = true;
+  game.parking.boardingInProgress = false;
+}
+
+function completeShelterDrop(game, zone) {
+  const stops = game.stops;
+  zone.state = 'completed';
+  zone.dwellTimer = CONFIG.stops.dwellSeconds;
+  stops.dwellProgress = 1;
+  stops.completed++;
+  stops.combo = 0;
+  stops.feedback = 'DOGS DELIVERED TO DOGE SHELTER';
+  stops.feedbackTimer = CONFIG.shelter.dropOffNoticeSeconds;
+  stops.successTimer = CONFIG.shelter.dropOffNoticeSeconds;
+  game.shelteredTotal = (game.shelteredTotal || 0) + game.shelterUnloading.total;
+  game.dogsJustSheltered = (game.carriedDogs || []).map((dog) => ({ ...dog }));
+  game.onboardDogs = 0;
+  game.carriedDogColors = [];
+  game.carriedDogs = [];
+  game.shelterDogs = [];
+  game.shelterDue = false;
+  game.shelterUnloading = null;
+  game.parking.unloadingInProgress = false;
+  game.parking.boardingComplete = true;
+  for (const upcoming of stops.zones) {
+    if (upcoming.state === 'upcoming') upcoming.isShelter = false;
+  }
 }
 
 function fillUpcomingZones(stops) {
@@ -139,5 +225,5 @@ function completeStop(game, zone) {
 }
 
 function speedKph(speed) {
-  return (speed / CONFIG.distance.pixelsPerMeter) * 3.6;
+  return (Math.abs(speed) / CONFIG.distance.pixelsPerMeter) * 3.6;
 }

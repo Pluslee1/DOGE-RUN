@@ -7,6 +7,7 @@ import {
 } from './world.js';
 import { createStopSystem, updateStopSystem } from './stops.js';
 import { createMission } from './missions.js';
+import { cityConditionAt, companionReaction } from './city-conditions.js';
 
 const SCROLL_LOOP_HEIGHT = CONFIG.logicalHeight + 240;
 const START_LANE = 1;
@@ -19,6 +20,7 @@ export function createGame(seed = Date.now()) {
     endReason: null,
     vanHealth: CONFIG.crash.vanHealth,
     crashCount: 0,
+    hitRecoveryElapsed: 0,
     crashState: 'clear',
     crashElapsed: 0,
     cameraShake: 0,
@@ -36,6 +38,10 @@ export function createGame(seed = Date.now()) {
     magnetTimer: 0,
     upgrades: {},
     route: null,
+    environmentSeed: (seed ^ CONFIG.cityConditions.seedSalt) >>> 0,
+    cityCondition: 'clear',
+    companionMessage: CONFIG.companion.idleMessage,
+    companionTimer: 0,
     elapsed: 0,
     distance: 0,
     scrollOffset: 0,
@@ -43,6 +49,8 @@ export function createGame(seed = Date.now()) {
     van: {
       lane: START_LANE,
       x: laneVanX(START_LANE),
+      previousX: laneVanX(START_LANE),
+      slideFromLane: START_LANE,
       slideFrom: laneVanX(START_LANE),
       slideTo: laneVanX(START_LANE),
       slideT: 1,
@@ -53,6 +61,16 @@ export function createGame(seed = Date.now()) {
       damageStage: 0,
     },
     rescued: 0,
+    onboardDogs: 0,
+    carriedDogColors: [],
+    carriedDogs: [],
+    lastRescueName: '',
+    lastRescueTimer: 0,
+    shelterDue: false,
+    shelterUnloading: null,
+    shelterDogs: [],
+    shelteredDogs: [],
+    shelteredTotal: 0,
     stopPoints: 0,
     stops: createStopSystem(),
     vanSpeed: CONFIG.speed.start,
@@ -65,6 +83,10 @@ export function createGame(seed = Date.now()) {
       zoneIndex: null,
       boardingComplete: false,
       boardingInProgress: false,
+      unloadingInProgress: false,
+      autoHoldForRescue: false,
+      autoHoldTargetZ: null,
+      autoReleasedBrake: false,
     },
     task: createMission(seed ^ 0x27d4eb2d, 0),
     nextMissionId: 1,
@@ -104,7 +126,9 @@ function rand(n) {
 export function update(game, dt, laneStep = 0, buttons = null, jumpPressed = false) {
   if (game.state !== 'running') return false;
 
-  if (laneStep && !game.parking.boardingInProgress && game.crashState !== 'stopping') {
+  game.van.previousX = game.van.x;
+
+  if (laneStep && !game.parking.unloadingInProgress && !game.parking.autoHoldForRescue && game.crashState !== 'stopping') {
     moveLane(game, Math.sign(laneStep));
   }
 
@@ -118,9 +142,24 @@ export function update(game, dt, laneStep = 0, buttons = null, jumpPressed = fal
 
   game.elapsed += dt;
   game.cameraShake = Math.max(0, game.cameraShake - CONFIG.crash.shakeDecayPerSecond * dt);
+  game.companionTimer = Math.max(0, game.companionTimer - dt);
+  if (game.companionTimer === 0) game.companionMessage = CONFIG.companion.idleMessage;
+
+  if (game.crashCount > 0 && game.crashState === 'clear') {
+    game.hitRecoveryElapsed += dt;
+    if (game.hitRecoveryElapsed >= CONFIG.crash.hitRecoverySeconds) {
+      game.crashCount = 0;
+      game.vanHealth = CONFIG.crash.vanHealth;
+      game.van.damageStage = 0;
+      game.hitRecoveryElapsed = 0;
+    }
+  }
 
   const progress = Math.min(game.elapsed / CONFIG.speed.rampSeconds, 1);
-  game.speed = CONFIG.speed.start + (CONFIG.speed.max - CONFIG.speed.start) * easeIn(progress);
+  const distanceProgress = Math.min(game.distance / CONFIG.speed.distanceBonusFullMeters, 1);
+  const distanceBonus = CONFIG.speed.distanceBonusMax * distanceProgress;
+  game.speed = (CONFIG.speed.start + (CONFIG.speed.max - CONFIG.speed.start) * easeIn(progress) + distanceBonus)
+    * (game.vehicle?.speedMultiplier || 1);
   if (game.route) game.speed += game.route.level * CONFIG.progression.levelSpeedBonus;
   game.shieldTimer = Math.max(0, game.shieldTimer - dt);
   game.magnetTimer = Math.max(0, game.magnetTimer - dt);
@@ -135,7 +174,16 @@ export function update(game, dt, laneStep = 0, buttons = null, jumpPressed = fal
   const spd = game.vanSpeed;
   const previousDistance = game.distance;
   const nextDistance = previousDistance + (spd * dt) / CONFIG.distance.pixelsPerMeter;
-  game.distance = Math.max(0, nextDistance);
+  game.distance = game.parking.autoHoldForRescue && game.parking.autoHoldTargetZ !== null
+    ? game.parking.autoHoldTargetZ
+    : Math.max(0, nextDistance);
+  const nextCondition = cityConditionAt(game.environmentSeed, game.distance);
+  if (nextCondition !== game.cityCondition) {
+    game.cityCondition = nextCondition;
+    if (nextCondition !== 'clear') {
+      companionReaction(game, `${nextCondition}Message`);
+    }
+  }
   const actualScroll = (game.distance - previousDistance) * CONFIG.distance.pixelsPerMeter;
   game.scrollOffset = (game.scrollOffset + actualScroll + SCROLL_LOOP_HEIGHT) % SCROLL_LOOP_HEIGHT;
   if (spd < 0 && nextDistance < 0) {
@@ -161,9 +209,10 @@ export function update(game, dt, laneStep = 0, buttons = null, jumpPressed = fal
 function updateJump(game, dt, jumpPressed) {
   game.jumpCooldown = Math.max(0, game.jumpCooldown - dt);
   if (jumpPressed && !game.isJumping && game.jumpCooldown <= 0
-    && game.crashState !== 'stopping' && !game.parking.boardingInProgress) {
+    && game.crashState !== 'stopping' && !game.parking.boardingInProgress && !game.parking.unloadingInProgress) {
     game.isJumping = true;
     game.jumpElapsed = 0;
+    companionReaction(game, 'jumpMessage');
   }
   if (!game.isJumping) {
     game.jumpHeight = 0;
@@ -198,11 +247,16 @@ function updateParking(game, dt) {
   const vanInStopZone = inRescueLane && withinRescueLane && Boolean(stopZone);
 
   if (!vanInStopZone) {
+    if (game.parking.autoHoldForRescue) {
+      game.parking.autoHoldForRescue = false;
+      game.parking.autoHoldTargetZ = null;
+    }
     game.parking.state = 'not-in-stop-zone';
     game.parking.timer = 0;
     game.parking.zoneIndex = null;
     game.parking.boardingComplete = false;
     game.parking.boardingInProgress = false;
+    game.parking.unloadingInProgress = false;
     return;
   }
 
@@ -211,12 +265,32 @@ function updateParking(game, dt) {
     && stopZone.dogsBoarded >= stopZone.dogCount;
   if (game.parking.boardingComplete) game.parking.boardingInProgress = false;
 
-  if (game.vanSpeed <= CONFIG.parking.stopSpeed) {
+  // Latch the van in an active rescue bay as soon as it reaches a near-stop.
+  // Releasing BRAKE then leaves the van parked while dogs board; GAS remains
+  // available to leave if the rescue is interrupted.
+  if (!stopZone.isShelter
+    && stopZone.state === 'active'
+    && !game.parking.boardingComplete
+    && Math.abs(game.vanSpeed) <= CONFIG.parking.stopSpeed) {
+    game.parking.autoHoldForRescue = true;
+    game.parking.autoHoldTargetZ = game.distance;
+    game.parking.timer = PARK_DURATION;
+    game.vanSpeed = 0;
+  }
+
+  if (game.parking.autoHoldForRescue) {
+    game.parking.timer = PARK_DURATION;
+    game.parking.state = 'parked';
+    return;
+  }
+
+  if (Math.abs(game.vanSpeed) <= CONFIG.parking.stopSpeed) {
     game.parking.timer += dt;
     game.parking.state = game.parking.timer >= PARK_DURATION ? 'parked' : 'in-stop-zone-moving';
   } else {
     game.parking.timer = 0;
     game.parking.state = 'in-stop-zone-moving';
+    if (!game.parking.boardingComplete) game.parking.boardingInProgress = false;
   }
 }
 
@@ -229,7 +303,7 @@ function applyThrottle(game, dt, buttons) {
     return;
   }
 
-  if (game.parking.boardingInProgress && !game.parking.boardingComplete) {
+  if (game.parking.unloadingInProgress) {
     game.vanSpeed = 0;
     game.isBoosting = false;
     game.isBraking = true;
@@ -239,13 +313,78 @@ function applyThrottle(game, dt, buttons) {
 
   const normalSpeed = game.speed;
   const speedHeld = buttons && buttons.isPressed('speed');
-  const brakeHeld = buttons && buttons.isPressed('brake');
+  const physicalBrakeHeld = Boolean(buttons && buttons.isPressed('brake'));
+  if (!physicalBrakeHeld) game.parking.autoReleasedBrake = false;
+
+  const heldRescueZone = game.parking.autoHoldForRescue
+    ? game.stops.zones.find((zone) => zone.index === game.parking.zoneIndex)
+    : null;
+  if (game.parking.autoHoldForRescue && heldRescueZone
+    && heldRescueZone.dogCount > 0
+    && heldRescueZone.dogsBoarded >= heldRescueZone.dogCount) {
+    game.parking.autoHoldForRescue = false;
+    game.parking.autoHoldTargetZ = null;
+    game.parking.autoReleasedBrake = physicalBrakeHeld;
+  }
+  // GAS stays available as an escape if a rescue ever cannot finish.
+  if (game.parking.autoHoldForRescue && speedHeld) {
+    game.parking.autoHoldForRescue = false;
+    game.parking.autoHoldTargetZ = null;
+    game.parking.autoReleasedBrake = physicalBrakeHeld;
+  }
+  if (game.parking.autoHoldForRescue) {
+    game.vanSpeed = 0;
+    game.isBoosting = false;
+    game.isBraking = true;
+    game.isReversing = false;
+    return;
+  }
+
+  const brakeHeld = physicalBrakeHeld && !game.parking.autoReleasedBrake;
   game.isBoosting = Boolean(speedHeld);
   game.isBraking = Boolean(brakeHeld);
   game.isReversing = false;
 
   if (brakeHeld) {
-    if (isInsideYellowPickupBay(game) || game.distance <= 0) {
+    if (isInsideYellowPickupBay(game)) {
+      if (game.vanSpeed < 0) {
+        // Reverse through the bay to its midpoint, then hold for dog boarding.
+        const zone = game.stops.zones.find((item) => (
+          (item.state === 'upcoming' || item.state === 'active')
+          && !item.isShelter
+          && item.dogCount > item.dogsBoarded
+          && game.distance >= item.startZ
+          && game.distance <= item.endZ
+          && item.lane === RESCUE_LANE
+          && game.van.lane === RESCUE_LANE
+        ));
+        if (zone) {
+          const midpoint = (zone.startZ + zone.endZ) / 2;
+          const predictedDistance = game.distance
+            + (game.vanSpeed * dt) / CONFIG.distance.pixelsPerMeter;
+          if (game.distance >= midpoint && predictedDistance <= midpoint) {
+            game.parking.autoHoldForRescue = true;
+            game.parking.autoHoldTargetZ = midpoint;
+            game.parking.zoneIndex = zone.index;
+            // Finish any in-progress lane slide so the van is fully inside the bay.
+            const rescueLane = laneBounds(RESCUE_LANE);
+            game.van.x = rescueLane.center - game.van.width / 2;
+            game.van.previousX = game.van.x;
+            game.van.slideFrom = game.van.x;
+            game.van.slideTo = game.van.x;
+            game.van.slideT = 1;
+            game.parking.timer = PARK_DURATION;
+            game.vanSpeed = 0;
+            game.isReversing = false;
+            return;
+          }
+        }
+        game.isReversing = true;
+      } else {
+        game.vanSpeed = Math.max(0, game.vanSpeed - CONFIG.speed.brakeStrength * dt);
+        game.isReversing = false;
+      }
+    } else if (game.distance <= 0) {
       game.vanSpeed = Math.max(0, game.vanSpeed - CONFIG.speed.brakeStrength * dt);
     } else {
       game.vanSpeed = Math.max(
@@ -286,6 +425,7 @@ function moveLane(game, dir) {
   // All three lanes are reachable; the rightmost lane contains rescue bays.
   const target = clampDrivingLane(van.lane + dir);
   if (target === van.lane) return;
+  van.slideFromLane = van.lane;
   van.lane = target;
   van.slideFrom = van.x;
   van.slideTo = laneVanX(target);

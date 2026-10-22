@@ -29,7 +29,14 @@ export function updateTraffic(game, field, dt) {
       )
       : 0;
     const carSpeed = trafficSpeed + maneuverSpeed;
-    const relativeScroll = (game.vanSpeed - carSpeed) * dt;
+    const jumpGap = game.van.y - (c.y + c.depth);
+    const jumpPass = game.isJumping
+      && game.vanSpeed > trafficSpeed
+      && c.lane === game.van.lane
+      && c.y < game.van.y
+      && jumpGap <= CONFIG.traffic.jumpOvertakeRangePx;
+    const jumpOvertake = jumpPass ? CONFIG.traffic.jumpOvertakeBoostPxPerSecond : 0;
+    const relativeScroll = (game.vanSpeed - carSpeed + jumpOvertake) * dt;
     c.y += relativeScroll;
     c.travel += Math.abs(relativeScroll);
     c.worldDistance += (carSpeed * dt) / CONFIG.distance.pixelsPerMeter;
@@ -47,7 +54,10 @@ export function updateTraffic(game, field, dt) {
   field.sinceWave += dt;
   if (game.crashState !== 'stopping' && field.sinceWave >= interval) {
     field.sinceWave -= interval;
-    spawnWave(field, game, difficultyAt(game.distance));
+    const eventDifficulty = game.cityCondition === 'market' || game.cityCondition === 'roadworks'
+      ? CONFIG.cityConditions.roadworkTrafficDifficulty
+      : 0;
+    spawnWave(field, game, Math.max(difficultyAt(game.distance), eventDifficulty));
   }
 }
 
@@ -127,11 +137,12 @@ function difficultyAt(distance) {
   return Math.max(0, Math.min(1, (distance - CONFIG.traffic.difficultyStartMeters) / span));
 }
 
-// Cars that have left either end of the view are removed so the pool stays
-// bounded while traffic passes a stopped van or gets overtaken.
+// Retain cars beyond the far camera edge so they can drive into view from the
+// road ahead; recycle them after they pass the van.
 function keepCar(field) {
   return (c) => {
-    if (c.y < CONFIG.logicalHeight + c.depth && c.y + c.depth > 0) return true;
+    if (c.y < CONFIG.logicalHeight + c.depth
+      && c.y + c.depth > -CONFIG.traffic.approachBufferPx) return true;
     return false;
   };
 }
@@ -147,11 +158,26 @@ function spawnWave(field, game, difficulty) {
 
   const occupied = [];
 
-  for (const lane of pickBlockedLanes(rng, difficulty)) {
-    const worldDistance = game.distance + lead / CONFIG.distance.pixelsPerMeter;
+  const lanes = pickBlockedLanes(rng, difficulty);
+  if (field.waveCount === 1 && lanes.length > 0) {
+    const visibleApproachLane = Math.floor(LANE_COUNT / 2);
+    lanes.splice(0, lanes.length, visibleApproachLane, ...lanes.filter((lane) => lane !== visibleApproachLane));
+  }
+
+  let tankerAssigned = false;
+  const guaranteeTanker = field.waveCount === 1
+    || field.waveCount % CONFIG.traffic.tankerGuaranteedEveryWaves === 0;
+  for (const lane of lanes) {
+    // Spread cars along the road's depth inside a wave. This gives each car
+    // room to approach from the horizon instead of appearing side by side.
+    const laneY = waveY + rng() * CONFIG.traffic.waveDepthSpreadPx;
+    const actualLead = game.van.y - laneY;
+    const worldDistance = game.distance + actualLead / CONFIG.distance.pixelsPerMeter;
     if (lane === RESCUE_LANE && isBayApproach(game, worldDistance)) continue;
-    if (!laneHasRoom(field, lane, waveY)) continue;
-    placeInLane(field, lane, waveY, worldDistance, rng);
+    if (!laneHasRoom(field, lane, laneY)) continue;
+    const forceTanker = guaranteeTanker && !tankerAssigned;
+    placeInLane(field, lane, laneY, worldDistance, rng, forceTanker);
+    tankerAssigned ||= forceTanker;
     occupied.push(lane);
   }
 
@@ -192,10 +218,8 @@ function widestRun(openLanes) {
   return { left: first.left, right: last.right };
 }
 
-// The spawn point is fixed, so a new car is always the furthest ahead in its
-// lane and the gap to the car behind it is the wave spacing. This only has to
-// reject the case where the lane's previous car has not yet cleared the
-// minimum gap, which it measures against that car's live position.
+// Reject a new car when another vehicle in its lane is still too close at the
+// selected depth along the road.
 function laneHasRoom(field, lane, waveY) {
   for (const c of field.cars) {
     if ((c.lane === lane || c.targetLane === lane)
@@ -204,9 +228,9 @@ function laneHasRoom(field, lane, waveY) {
   return true;
 }
 
-function placeInLane(field, lane, waveY, worldDistance, rng) {
+function placeInLane(field, lane, waveY, worldDistance, rng, forceTanker = false) {
   const bounds = laneBounds(lane);
-  const type = chooseTrafficType(rng);
+  const type = forceTanker ? 'tanker' : chooseTrafficType(rng);
   const dimensions = trafficDimensions(type);
   const width = Math.min(dimensions.width, bounds.right - bounds.left);
   const depth = dimensions.depth;

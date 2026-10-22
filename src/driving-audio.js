@@ -2,6 +2,9 @@ import { CONFIG } from './config.js';
 
 export function createDrivingAudio(context) {
   const settings = CONFIG.audio;
+  const masterGain = context.createGain();
+  masterGain.gain.value = 1;
+  masterGain.connect(context.destination);
 
   const engine = context.createOscillator();
   engine.type = 'sawtooth';
@@ -18,7 +21,7 @@ export function createDrivingAudio(context) {
   engineHarmonic.connect(harmonicGain);
   harmonicGain.connect(engineFilter);
   engineFilter.connect(engineGain);
-  engineGain.connect(context.destination);
+  engineGain.connect(masterGain);
   engine.start();
   engineHarmonic.start();
 
@@ -32,7 +35,7 @@ export function createDrivingAudio(context) {
   hornGain.gain.value = 0;
   hornLow.connect(hornGain);
   hornHigh.connect(hornGain);
-  hornGain.connect(context.destination);
+  hornGain.connect(masterGain);
   hornLow.start();
   hornHigh.start();
 
@@ -54,12 +57,43 @@ export function createDrivingAudio(context) {
   brakeGain.gain.value = 0;
   brakeNoise.connect(brakeFilter);
   brakeFilter.connect(brakeGain);
-  brakeGain.connect(context.destination);
+  brakeGain.connect(masterGain);
   brakeNoise.start();
 
   let lastUpdateTime = -Infinity;
+  let lastCoinSoundTime = -Infinity;
 
   return {
+    setMuted(muted) {
+      const now = context.currentTime;
+      masterGain.gain.cancelScheduledValues(now);
+      masterGain.gain.setTargetAtTime(muted ? 0 : 1, now, settings.audioSmoothingSeconds);
+    },
+
+    playCoin(count = 1, now = context.currentTime) {
+      if (context.state !== 'running' || now - lastCoinSoundTime < settings.coinPickupCooldownSeconds) return;
+      lastCoinSoundTime = now;
+      const pitch = settings.coinPickupHz + Math.max(0, count - 1) * settings.coinPitchStepHz;
+      const oscillator = context.createOscillator();
+      const gain = context.createGain();
+      oscillator.type = 'sine';
+      oscillator.frequency.setValueAtTime(pitch, now);
+      oscillator.frequency.exponentialRampToValueAtTime(
+        pitch * settings.coinPitchEndRatio,
+        now + settings.coinPickupSeconds * settings.coinPitchEndTimeRatio,
+      );
+      gain.gain.setValueAtTime(0.0001, now);
+      gain.gain.exponentialRampToValueAtTime(
+        settings.coinPickupGain,
+        now + settings.coinPickupSeconds * settings.coinAttackTimeRatio,
+      );
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + settings.coinPickupSeconds);
+      oscillator.connect(gain);
+      gain.connect(masterGain);
+      oscillator.start(now);
+      oscillator.stop(now + settings.coinPickupSeconds);
+    },
+
     update(game, buttons, now = context.currentTime) {
       if (context.state !== 'running' || now - lastUpdateTime < settings.audioUpdateInterval) return;
       lastUpdateTime = now;

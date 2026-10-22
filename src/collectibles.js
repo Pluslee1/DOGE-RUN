@@ -2,7 +2,14 @@ import { CONFIG } from './config.js';
 import { LANE_COUNT, laneBounds } from './world.js';
 
 export function createPickupField(seed = 76543) {
-  return { bones: [], coins: [], powerups: [], seed, lineCount: 0, nextId: 0, nextCoinId: 0, nextPowerupId: 0 };
+  return {
+    bones: [], coins: [], powerups: [], seed, lineCount: 0, nextId: 0,
+    nextCoinId: 0, nextPowerupId: 0,
+    coinSpawnTimer: CONFIG.coins.spawnIntervalSeconds,
+    coinWaveCount: 0,
+    powerupSpawnTimer: CONFIG.powerups.spawnIntervalSeconds,
+    powerupSpawnCount: 0,
+  };
 }
 
 export function spawnBoneLine(field, wave) {
@@ -56,11 +63,26 @@ export function spawnBoneLine(field, wave) {
     if (patternIndex > 0) aheadOffset += lastBoneOffset + bones.patternGapPx;
   }
   field.lineCount += 1;
-  spawnCoins(field, wave, openLanes);
-  spawnPowerup(field, wave, openLanes);
 }
 
 export function updatePickups(game, field, dt) {
+  field.coinSpawnTimer += dt;
+  while (field.coinSpawnTimer >= CONFIG.coins.spawnIntervalSeconds) {
+    field.coinSpawnTimer -= CONFIG.coins.spawnIntervalSeconds;
+    spawnCoinTrail(field, game, field.coinWaveCount++);
+  }
+  field.powerupSpawnTimer += dt;
+  while (field.powerupSpawnTimer >= CONFIG.powerups.spawnIntervalSeconds) {
+    field.powerupSpawnTimer -= CONFIG.powerups.spawnIntervalSeconds;
+    if (field.powerupSpawnCount === 0) {
+      for (let index = 0; index < CONFIG.powerups.openingPairCount; index++) {
+        spawnScheduledPowerup(field, game, field.powerupSpawnCount++, true);
+      }
+    } else {
+      spawnScheduledPowerup(field, game, field.powerupSpawnCount++);
+    }
+  }
+
   for (const b of field.bones) {
     if (b.taken) {
       b.collectT = Math.min(CONFIG.bones.collectSeconds, b.collectT + dt);
@@ -126,33 +148,40 @@ export function updatePickups(game, field, dt) {
   return { bones: collected, coins: coinsCollected };
 }
 
-function spawnCoins(field, wave, openLanes) {
-  const rng = makeRng(field.seed ^ CONFIG.coins.seedSalt ^ (wave.index * CONFIG.coins.waveSeedMultiplier));
-  if (rng() >= CONFIG.coins.spawnChance) return;
-  const lane = openLanes[Math.floor(rng() * openLanes.length)];
-  const count = CONFIG.coins.trailMin + Math.floor(rng() * (CONFIG.coins.trailMax - CONFIG.coins.trailMin + 1));
-  const bounds = laneBounds(lane);
+function spawnCoinTrail(field, game, waveIndex) {
+  const rng = makeRng(field.seed ^ CONFIG.coins.seedSalt ^ (waveIndex * CONFIG.coins.waveSeedMultiplier));
+  const count = CONFIG.coins.trailMin
+    + Math.floor(rng() * (CONFIG.coins.trailMax - CONFIG.coins.trailMin + 1));
+  const firstLane = Math.floor(rng() * LANE_COUNT);
+  const switchesLane = rng() < CONFIG.coins.laneSwitchChance;
+
   for (let index = 0; index < count; index++) {
+    const laneStep = switchesLane ? Math.floor(index / CONFIG.coins.laneChangeEvery) : 0;
+    const lane = (firstLane + laneStep) % LANE_COUNT;
+    const bounds = laneBounds(lane);
     field.coins.push({
       id: field.nextCoinId++, lane,
       x: bounds.center - CONFIG.coins.widthPx / 2,
-      y: wave.y + CONFIG.coins.yOffset - index * CONFIG.coins.spacingPx,
+      y: game.van.y - CONFIG.coins.spawnLeadPx - index * CONFIG.coins.spacingPx,
       width: CONFIG.coins.widthPx, height: CONFIG.coins.heightPx,
       taken: false, collectT: 0,
     });
   }
 }
 
-function spawnPowerup(field, wave, openLanes) {
-  const rng = makeRng(field.seed ^ CONFIG.powerups.seedSalt ^ (wave.index * CONFIG.powerups.waveSeedMultiplier));
-  if (rng() >= CONFIG.powerups.spawnChance) return;
-  const lane = openLanes[Math.floor(rng() * openLanes.length)];
+function spawnScheduledPowerup(field, game, spawnIndex, opening = false) {
+  const rng = makeRng(field.seed ^ CONFIG.powerups.seedSalt ^ (spawnIndex * CONFIG.powerups.waveSeedMultiplier));
+  const openingSideLane = game.van.lane === 0 ? 1 : game.van.lane - 1;
+  const lane = opening
+    ? (spawnIndex === 0 ? game.van.lane : openingSideLane)
+    : Math.floor(rng() * LANE_COUNT);
   const bounds = laneBounds(lane);
   field.powerups.push({
     id: field.nextPowerupId++, lane,
-    kind: rng() < 0.5 ? 'shield' : 'magnet',
+    kind: spawnIndex % CONFIG.powerups.magnetEveryNth === 0 ? 'magnet' : 'shield',
     x: bounds.center - CONFIG.powerups.widthPx / 2,
-    y: wave.y + CONFIG.powerups.yOffset,
+    y: game.van.y - CONFIG.powerups.spawnLeadPx
+      - (opening ? (spawnIndex % CONFIG.powerups.openingPairCount) * CONFIG.powerups.openingPairSpacingPx : 0),
     width: CONFIG.powerups.widthPx, height: CONFIG.powerups.heightPx,
     taken: false, collectT: 0,
   });
@@ -163,9 +192,11 @@ function attractToVan(pickup, game, dt) {
   const pickupX = pickup.x + pickup.width / 2;
   const vanX = game.van.x + game.van.width / 2;
   const pickupY = pickup.y + pickup.height / 2;
-  const vanY = game.van.y + game.van.height / 2;
+  const vanFrontY = game.van.y + CONFIG.powerups.magnetTargetYOffsetPx;
+  // Once a pickup has passed the van completely, don't yank it backward into view.
+  if (pickupY > game.van.y + game.van.height) return;
   const dx = vanX - pickupX;
-  const dy = vanY - pickupY;
+  const dy = vanFrontY - pickupY;
   const distance = Math.hypot(dx, dy);
   if (distance > CONFIG.powerups.magnetRangePx || distance === 0) return;
   const pull = Math.min(distance, CONFIG.powerups.magnetPullPxPerSecond * dt);

@@ -2,8 +2,8 @@ import { CONFIG } from './config.js';
 
 const LEFT_KEYS = new Set(['ArrowLeft', 'KeyA']);
 const RIGHT_KEYS = new Set(['ArrowRight', 'KeyD']);
-const JUMP_KEYS = new Set(['ArrowUp', 'KeyW']);
-const ACTION_KEYS = new Set(['Space', 'Enter']);
+const JUMP_KEYS = new Set(['Space', 'ArrowUp', 'KeyW']);
+const ACTION_KEYS = new Set(['Enter']);
 const PAUSE_KEYS = new Set(['KeyP', 'Escape']);
 
 const SWIPE_THRESHOLD_PX = CONFIG.lanes.swipeThresholdPx;
@@ -53,6 +53,7 @@ export function createInput(target = window, onAction = null, onPause = null) {
 
       surface.addEventListener('pointerdown', (event) => {
         pointers.set(event.pointerId, { startX: event.clientX, startY: event.clientY, fired: false });
+        surface.setPointerCapture?.(event.pointerId);
       });
 
       surface.addEventListener('pointermove', (event) => {
@@ -77,7 +78,7 @@ export function createInput(target = window, onAction = null, onPause = null) {
       const release = (event) => pointers.delete(event.pointerId);
       surface.addEventListener('pointerup', release);
       surface.addEventListener('pointercancel', release);
-      surface.addEventListener('pointerleave', release);
+      surface.addEventListener('lostpointercapture', release);
     },
 
     laneStep() {

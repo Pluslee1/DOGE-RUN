@@ -18,6 +18,8 @@ export function createBuildingSpawner(scene) {
   };
   const activeBuildings = [];
   const activeBillboards = [];
+  const recycledBuildings = [];
+  const recycledBillboards = [];
   let furthestZ = 0;
   let furthestBillboardZ = 0;
   let previousPlayerZ = null;
@@ -30,7 +32,11 @@ export function createBuildingSpawner(scene) {
   scene.add(group);
 
   function spawnBuilding(z, side) {
-    const building = createModernBuilding({ boxGeometry, materials, waterTankGeometry });
+    const recycledIndex = recycledBuildings.findIndex((item) => item.userData.scenerySide === side);
+    const building = recycledIndex === -1
+      ? createModernBuilding({ boxGeometry, materials, waterTankGeometry })
+      : recycledBuildings.splice(recycledIndex, 1)[0];
+    building.userData.scenerySide = side;
     building.position.set(side < 0 ? CITY.leftSideX : CITY.rightSideX, CITY.sidewalkLift, z);
     group.add(building);
     activeBuildings.push(building);
@@ -49,8 +55,9 @@ export function createBuildingSpawner(scene) {
     while (furthestBillboardZ < CITY.spawnAheadDistance) {
       furthestBillboardZ += CITY.billboardSpacing;
       const side = Math.random() < CITY.billboardSideChance ? -1 : 1;
-      const billboard = spawnBillboard(side, furthestBillboardZ);
-      group.add(billboard);
+      const billboard = recycledBillboards.pop() || spawnBillboard(side, furthestBillboardZ);
+      if (billboard.parent !== group) group.add(billboard);
+      billboard.position.z = furthestBillboardZ;
       activeBillboards.push(billboard);
     }
   }
@@ -69,6 +76,7 @@ export function createBuildingSpawner(scene) {
         if (building.position.z < -CITY.recycleBehindDistance) {
           group.remove(building);
           activeBuildings.splice(index, 1);
+          recycledBuildings.push(building);
         }
       }
 
@@ -77,8 +85,8 @@ export function createBuildingSpawner(scene) {
         billboard.position.z -= delta;
         if (billboard.position.z < -CITY.recycleBehindDistance) {
           group.remove(billboard);
-          disposeBillboard(billboard);
           activeBillboards.splice(index, 1);
+          recycledBillboards.push(billboard);
         }
       }
 
@@ -96,6 +104,9 @@ export function createBuildingSpawner(scene) {
       fillAhead();
       furthestBillboardZ -= delta;
       fillBillboards();
+    },
+    setVisible(visible) {
+      group.visible = visible;
     },
     activeBuildings,
     activeBillboards,
@@ -149,14 +160,7 @@ export function spawnBillboard(side, zPosition) {
 
   billboard.position.set(side * CITY.billboardOffsetX, 0, zPosition);
   billboard.userData.light = light;
-  billboard.userData.disposableGeometries = [poleGeometry, frameGeometry, canvasGeometry];
-  billboard.userData.disposableMaterials = [poleMaterial, frameMaterial, canvasMaterial];
   return billboard;
-}
-
-function disposeBillboard(billboard) {
-  for (const geometry of billboard.userData.disposableGeometries) geometry.dispose();
-  for (const material of billboard.userData.disposableMaterials) material.dispose();
 }
 
 function createWalkwaySegment(side, segment, boxGeometry, groundGeometry, paverGeometry, treeGeometries, materials) {

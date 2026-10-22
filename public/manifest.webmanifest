@@ -1,0 +1,19 @@
+{
+  "name": "Doge Rescue Run",
+  "short_name": "Doge Rescue",
+  "description": "Drive a rescue van through the city and bring dogs to safety.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0b0d17",
+  "theme_color": "#0b0d17",
+  "icons": [
+    {
+      "src": "./doge-rescue-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

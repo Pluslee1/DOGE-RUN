@@ -6,33 +6,123 @@
       name="viewport"
       content="width=device-width, initial-scale=1, user-scalable=no, viewport-fit=cover"
     />
+    <meta name="theme-color" content="#0b0d17" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <title>Doge Rescue Run</title>
-    <link rel="stylesheet" href="/css/style.css" />
+    <link rel="icon" href="./doge-rescue-icon.svg" type="image/svg+xml" />
+    <link rel="manifest" href="./manifest.webmanifest" />
   </head>
   <body>
     <div class="stage">
       <canvas id="game"></canvas>
       <canvas id="hud"></canvas>
+      <div id="adoption-toast" class="adoption-toast" role="status" aria-live="polite" hidden></div>
 
-      <section id="career" class="career-menu" aria-label="Rescue routes and garage">
+      <section id="career" class="career-menu" aria-label="Choose a world and garage">
+        <button id="home-settings-button" class="home-settings-button" type="button" aria-label="Settings" title="Settings" aria-expanded="false" aria-controls="home-settings">⚙</button>
+        <div id="home-settings" class="home-settings is-hidden" aria-label="Home settings">
+          <strong>Music</strong>
+          <button id="home-music-toggle" class="pause-action" type="button">♫ Play background music</button>
+        </div>
         <div class="career-card">
           <p class="career-kicker">DOGE RESCUE RUN</p>
-          <h1>Choose your route</h1>
-          <p class="career-note">Your Doge City surroundings stay the same on every route.</p>
-          <div class="career-route">
-            <label>World<select id="world-select"></select></label>
-            <label>Level<select id="level-select"></select></label>
+          <h1>Choose your world</h1>
+          <p class="career-note">Tap a map to start your rescue run.</p>
+          <div class="world-cards" id="world-cards" aria-label="Available worlds"></div>
+          <div class="garage-showroom">
+            <div class="garage-heading"><h2>Van garage</h2><span class="garage-balances"><span>🪙 <span id="coin-bank">0</span></span><span>🐕 <span id="dog-bank">0</span></span></span></div>
+            <canvas id="garage-preview" aria-label="Drag to turn the selected van around"></canvas>
+            <p class="garage-drag-note">Drag the van to turn it around</p>
+            <div id="van-details" class="van-details" aria-live="polite"></div>
+            <div id="van-list" class="van-list" aria-label="Choose or unlock a van"></div>
+            <button id="van-action" class="career-start" type="button"></button>
           </div>
-          <div class="career-wallet">🪙 <span id="coin-bank">0</span> coins</div>
+          <section class="shelter-roster" aria-label="Dogs at your rescue shelter">
+            <div class="shelter-roster-heading"><h2>Doge shelter</h2><span id="shelter-total">0 residents</span></div>
+            <p id="shelter-empty">Rescue dogs and bring them to the shelter to meet everyone here.</p>
+            <div id="shelter-residents" class="shelter-residents"></div>
+          </section>
+          <button id="enter-shelter" class="career-start shelter-entry" type="button">🐾 Visit Doge Shelter</button>
+          <p class="career-wallet">Upgrade your garage</p>
           <div class="garage-list" id="garage-list"></div>
           <p id="career-message" class="career-message" aria-live="polite">Collect coins on the road to upgrade your van.</p>
           <button id="drive-route" class="career-start" type="button">Start rescue run</button>
         </div>
       </section>
 
+      <section id="shelter-view" class="shelter-view is-hidden" aria-label="Doge Shelter">
+        <header class="shelter-view__header">
+          <div><p class="career-kicker">YOUR RESCUE HOME</p><h1>Doge Shelter</h1><p id="shelter-summary">Meet the dogs you’ve saved.</p></div>
+          <div class="shelter-view__bank">🪙 <span id="shelter-coins">0</span><br>🐕 <span id="shelter-count">0 dogs</span></div>
+          <div class="shelter-view__actions">
+            <button id="shelter-music-toggle" type="button" class="shelter-leave">♫ Pause music</button>
+            <button id="leave-shelter" type="button" class="shelter-leave">Back to home</button>
+          </div>
+        </header>
+        <p id="shelter-controls-hint" class="shelter-view__hint" hidden>Walk with WASD or the arrows · drag to look around · E opens doors or uses room items · F pets a dog · G talks to Amara</p>
+        <div class="shelter-action-dock" aria-label="Nearby shelter actions">
+          <button id="shelter-door-action" class="shelter-door-action" type="button" hidden>Open shelter door</button>
+          <button id="shelter-room-action" class="shelter-room-action" type="button" hidden>Use shelter item</button>
+          <button id="shelter-pet-action" class="shelter-pet-action" type="button" hidden>Pet dog</button>
+          <button id="shelter-volunteer-action" class="shelter-volunteer-action" type="button" hidden>Talk to Amara</button>
+        </div>
+        <p id="shelter-task-status" class="shelter-task-status" hidden aria-live="polite"></p>
+        <p id="shelter-interaction-message" class="shelter-interaction-message" aria-live="polite"></p>
+        <section class="shelter-shop" aria-label="Shelter care upgrades">
+          <details class="shelter-shop__drawer">
+            <summary><span>Improve shelter</span><span id="shelter-level-progress">Rank 1 · 0 points</span></summary>
+            <div class="shelter-shop__scroll">
+              <div id="shelter-upgrades"></div>
+              <div class="shelter-upgrade care-package-row">
+                <div class="shelter-upgrade__copy"><strong>Care package · grow your rank</strong><small>Deliver food and care supplies. Each one adds a visible crate and 1 rank point.</small><small id="care-package-count">Owned: 0</small></div>
+                <button id="buy-care-package" type="button">🪙 300</button>
+              </div>
+            </div>
+            <p id="shelter-shop-message" aria-live="polite">Choose an upgrade to grow your shelter.</p>
+          </details>
+        </section>
+        <div class="shelter-pad" aria-label="Walk controls">
+          <button type="button" data-walk="forward" aria-label="Walk forward">▲</button>
+          <button type="button" data-walk="left" aria-label="Walk left">◀</button>
+          <button type="button" data-walk="back" aria-label="Walk back">▼</button>
+          <button type="button" data-walk="right" aria-label="Walk right">▶</button>
+        </div>
+      </section>
+
+      <section id="pause-menu" class="pause-menu is-hidden" aria-label="Paused game controls">
+        <div class="pause-card">
+          <p class="career-kicker">DOGE RESCUE RUN</p>
+          <h1>Game paused</h1>
+          <button id="resume-run" class="career-start" type="button">Resume</button>
+          <button id="restart-run" class="pause-action" type="button">Restart game</button>
+          <button id="sound-toggle" class="pause-action" type="button">Sound: On</button>
+          <button id="pause-music-toggle" class="pause-action" type="button">♫ Pause background music</button>
+          <button id="home-run" class="pause-action pause-action--home" type="button">Back to home</button>
+        </div>
+      </section>
+
+      <section id="radio-dock" class="radio-dock" aria-label="Online radio controls">
+        <audio id="ambient-music-audio" src="/audio/ambient-karma.mp3" preload="none" loop></audio>
+        <audio id="game-radio-audio" preload="none"></audio>
+        <div class="radio-dock__topline">
+          <div class="radio-dock__info">
+            <div class="radio-dock__heading"><strong>DOGE FM</strong></div>
+            <p id="radio-channel" class="radio-channel">Online radio</p>
+          </div>
+          <div class="radio-dock__player">
+            <p id="radio-status" class="radio-status" aria-live="polite"></p>
+            <div class="radio-controls">
+              <button id="radio-previous" type="button" aria-label="Previous radio channel" disabled>‹</button>
+              <button id="radio-play" type="button" aria-label="Play radio" disabled>▶</button>
+              <button id="radio-next" type="button" aria-label="Next radio channel" disabled>›</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
       <div class="controls">
       <button id="pause" class="pause-btn is-hidden" type="button" aria-label="Pause run">Ⅱ</button>
-      <button id="jump" class="action-btn action-btn--jump is-hidden" type="button" aria-label="Jump over a road obstacle">JUMP</button>
       <div class="drive-controls">
           <button id="horn" class="action-btn action-btn--horn" type="button" aria-label="Hold to honk">HORN</button>
           <button id="brake" class="action-btn action-btn--brake" type="button">BRAKE</button>

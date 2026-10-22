@@ -1,6 +1,7 @@
 import { CONFIG, DEBUG } from './config.js';
 import { scoreOf, missionStatus } from './score.js';
 import { nextStopZone } from './stops.js';
+import { cityConditionLabel } from './city-conditions.js';
 
 const COLOR_LABELS = {
   black: 'Black',
@@ -37,12 +38,38 @@ export function drawHud(ctx, game, dogs = null) {
   // Compact driving stats, like a dashboard above the road.
   const distance = formatDistance(game.distance);
   drawStatCard(ctx, 10, 12, 112, 54, 'DISTANCE', distance, p.hudText);
-  drawStatCard(ctx, logicalWidth - 122, 12, 112, 54, 'SCORE', String(scoreOf(game)), p.vanAccent);
+  drawStatCard(
+    ctx,
+    (logicalWidth - CONFIG.hud.scoreCardWidth) / 2,
+    CONFIG.hud.scoreCardY,
+    CONFIG.hud.scoreCardWidth,
+    44,
+    'SCORE',
+    String(scoreOf(game)),
+    p.vanAccent,
+  );
 
   drawTaskDisplay(ctx, game);
 
-  const stopLabel = game.parking.state === 'parked'
-    ? 'DOGS BOARDING'
+  drawInfoCard(
+    ctx,
+    logicalWidth - CONFIG.hud.onboardCardRightOffset,
+    CONFIG.hud.onboardCardY,
+    CONFIG.hud.onboardCardWidth,
+    CONFIG.hud.onboardCardHeight,
+    'DOGS',
+    `${game.onboardDogs}/${CONFIG.shelter.capacity}`,
+    p.vanAccent,
+  );
+
+  const nextZone = nextStopZone(game);
+  const shelterStopAhead = Boolean(nextZone?.isShelter);
+  const stopLabel = game.shelterUnloading
+    ? 'DOGS ENTERING SHELTER'
+    : shelterStopAhead && game.parking.state === 'parked'
+      ? 'DOGE SHELTER DROP-OFF'
+      : game.parking.state === 'parked'
+        ? 'DOGS BOARDING'
     : game.parking.state === 'in-stop-zone-moving'
       ? 'HOLD BRAKE HERE'
       : 'DOGS AT NEXT STOP';
@@ -56,11 +83,20 @@ export function drawHud(ctx, game, dogs = null) {
     ctx.textBaseline = 'middle';
     ctx.font = '800 12px "Segoe UI", system-ui, sans-serif';
     ctx.fillStyle = p.vanAccent;
-    ctx.fillText(`HITS ${game.crashCount}/${CONFIG.crash.vanHealth}`, logicalWidth / 2, 100);
+    ctx.fillText(`HITS ${game.crashCount}/${CONFIG.crash.vanHealth}`, logicalWidth / 2, 128);
   }
   drawRadioBadge(ctx, game);
   drawInfoCard(ctx, logicalWidth - 196, 132, 184, 46, 'BONES  ·  ROAD COINS', `${game.collected}  ·  ${game.coinsCollected || 0}`, p.vanAccent);
   drawStopHud(ctx, game);
+  drawRescueNameNotice(ctx, game);
+  drawConditionBadge(ctx, game);
+
+  if (game.onboardDogs >= CONFIG.shelter.capacity) {
+    const shelterMessage = game.shelterUnloading
+      ? `DOGS WALKING INSIDE · ${game.shelterUnloading.dogsRemaining} LEFT`
+      : 'VAN FULL · PARK AT THE DOGE SHELTER';
+    drawInfoCard(ctx, 16, 188, logicalWidth - 32, 44, 'DOGE SHELTER', shelterMessage, p.vanAccent);
+  }
 
   if (game.parking.state === 'parked') drawBoardingNotice(ctx);
 
@@ -69,6 +105,34 @@ export function drawHud(ctx, game, dogs = null) {
   }
 
   if (DEBUG) drawDebugInfo(ctx, game, dogs);
+  ctx.textAlign = 'left';
+}
+
+function drawConditionBadge(ctx, game) {
+  const { hud, palette: p } = CONFIG;
+  const label = cityConditionLabel(game.route?.worldId || 'lagos', game.cityCondition || 'clear');
+  drawInfoCard(
+    ctx,
+    hud.environmentCardX,
+    hud.environmentCardY,
+    hud.environmentCardWidth,
+    hud.environmentCardHeight,
+    'CITY EVENT',
+    label,
+    p.vanAccent,
+  );
+}
+
+function drawRescueNameNotice(ctx, game) {
+  if (!(game.lastRescueTimer > 0) || !game.lastRescueName) return;
+  const width = 270;
+  const x = (CONFIG.logicalWidth - width) / 2;
+  drawPanel(ctx, x, 454, width, 42, 'rgba(11,17,31,0.92)', 'rgba(243,185,50,0.8)');
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillStyle = CONFIG.palette.vanAccent;
+  ctx.font = '900 16px "Segoe UI", system-ui, sans-serif';
+  ctx.fillText(`${game.lastRescueName} IS SAFE!`, CONFIG.logicalWidth / 2, 475, width - 18);
   ctx.textAlign = 'left';
 }
 
@@ -82,7 +146,12 @@ function drawReadyScreen(ctx, game) {
   ctx.textBaseline = 'middle';
   ctx.fillStyle = p.vanAccent;
   ctx.font = '700 14px "Segoe UI", system-ui, sans-serif';
-  ctx.fillText('DOGE CITY  ·  LAGOS RESCUE ROUTE', w / 2, 145);
+  const routeTitle = game.route?.worldId === 'lagos'
+    ? 'DOGE CITY  ·  LAGOS RESCUE ROUTE'
+    : game.route
+      ? `${game.route.flag} ${game.route.worldName.toUpperCase()}  ·  ${game.route.name.toUpperCase()}`
+      : 'DOGE RESCUE ROUTE';
+  ctx.fillText(routeTitle, w / 2, 145);
 
   ctx.fillStyle = p.hudText;
   ctx.font = '900 42px "Segoe UI", system-ui, sans-serif';
@@ -112,11 +181,11 @@ function drawReadyScreen(ctx, game) {
   ctx.fillText('Hold BRAKE in yellow stop zones to earn rewards', w / 2, 565);
   ctx.fillText('Move to the right lane and stop in the yellow strip', w / 2, 588);
   ctx.fillText('Dogs board the rescue van one at a time', w / 2, 611);
-  ctx.fillText('Swipe up  ·  W / ↑ to jump over small road hazards', w / 2, 632);
+  ctx.fillText('Swipe up  ·  SPACE / W / ↑ to jump', w / 2, 632);
 
   ctx.fillStyle = 'rgba(242,242,242,0.58)';
   ctx.font = '600 12px "Segoe UI", system-ui, sans-serif';
-  ctx.fillText('SPACE / ENTER TO START', w / 2, h - 112);
+  ctx.fillText('ENTER TO START  ·  SPACE TO JUMP', w / 2, h - 112);
   ctx.textAlign = 'left';
   ctx.textBaseline = 'alphabetic';
 }
@@ -218,7 +287,8 @@ function drawStopHud(ctx, game) {
   const distanceLabel = distanceToStart > 0
     ? `${Math.ceil(distanceToStart)} m`
     : `${Math.max(0, Math.ceil(zone.endZ - game.distance))} m left`;
-  drawInfoCard(ctx, 12, 184, 204, 44, 'NEXT STOP', `${zone.name}  ·  ${distanceLabel}`, p.vanAccent);
+  const stopLabel = zone.specialLabel ? `SPECIAL · ${zone.specialLabel}` : 'NEXT STOP';
+  drawInfoCard(ctx, 12, 184, 204, 44, stopLabel, `${zone.name}  ·  ${distanceLabel}`, p.vanAccent);
   drawPanel(ctx, w - 164, 184, 152, 44, 'rgba(11,17,31,0.76)', 'rgba(255,255,255,0.12)');
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
@@ -351,7 +421,7 @@ export function drawEndScreen(ctx, game) {
 
   ctx.fillStyle = 'rgba(242, 242, 242, 0.85)';
   ctx.font = '600 16px "Segoe UI", system-ui, sans-serif';
-  ctx.fillText('Press SPACE or ENTER to run again', w / 2, h - 92);
+  ctx.fillText('Press ENTER to run again', w / 2, h - 92);
 
   ctx.textAlign = 'left';
   ctx.textBaseline = 'alphabetic';
