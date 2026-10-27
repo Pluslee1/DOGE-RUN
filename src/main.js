@@ -66,6 +66,9 @@ const shelterKeys = new Set();
 const shelterTouch = new Set();
 let shelterLookPointer = null;
 const pauseButton = document.getElementById('pause');
+pauseButton.style.setProperty('--pause-left', `${CONFIG.hud.pauseLeftPercent}%`);
+pauseButton.style.setProperty('--pause-top', `${CONFIG.hud.pauseTopPercent}%`);
+pauseButton.style.setProperty('--pause-size', `${CONFIG.hud.pauseSizePercent}%`);
 const careerPanel = document.getElementById('career');
 const careerCard = careerPanel.querySelector('.career-card');
 const radioDock = document.getElementById('radio-dock');
@@ -79,6 +82,7 @@ const homeSettingsButton = document.getElementById('home-settings-button');
 const homeSettings = document.getElementById('home-settings');
 const shelterMusicToggle = document.getElementById('shelter-music-toggle');
 let ambientMusicEnabled = true;
+let radioManuallyPaused = false;
 ambientMusicAudio.volume = CONFIG.audio.ambientMusicVolume;
 const shelterDoorAction = document.getElementById('shelter-door-action');
 const shelterRoomAction = document.getElementById('shelter-room-action');
@@ -104,6 +108,17 @@ const gameRadio = createGameRadio({
   playButton: document.getElementById('radio-play'),
   previousButton: document.getElementById('radio-previous'),
   nextButton: document.getElementById('radio-next'),
+  onPlaybackChange: (state) => {
+    if (state === 'paused') {
+      radioManuallyPaused = true;
+      ambientMusicEnabled = false;
+    }
+    else if (state === 'starting' || state === 'playing' || state === 'error') {
+      radioManuallyPaused = false;
+      ambientMusicEnabled = true;
+    }
+    syncAmbientMusic();
+  },
 });
 let previewVanId = selectedVan().id;
 careerCard.insertBefore(radioDock, worldCards);
@@ -138,7 +153,13 @@ function updateAmbientMusicButtons() {
 function syncAmbientMusic() {
   updateAmbientMusicButtons();
   const ambientScene = shelterActive || !careerPanel.classList.contains('is-hidden') || game?.state === 'paused';
-  if (!ambientMusicEnabled || !ambientScene || !radioAudio.paused || document.visibilityState === 'hidden') {
+  const gameplayScene = game?.state === 'running' && !shelterActive;
+  const shouldPlay = ambientMusicEnabled
+    && !radioManuallyPaused
+    && (ambientScene || gameplayScene)
+    && radioAudio.paused
+    && document.visibilityState !== 'hidden';
+  if (!shouldPlay) {
     ambientMusicAudio.pause();
     return;
   }
@@ -149,6 +170,13 @@ function syncAmbientMusic() {
 
 function toggleAmbientMusic() {
   ambientMusicEnabled = !ambientMusicEnabled;
+  if (!ambientMusicEnabled) {
+    radioManuallyPaused = true;
+    gameRadio.stop();
+  } else {
+    radioManuallyPaused = false;
+    if (game?.state === 'running' && !shelterActive) gameRadio.start();
+  }
   syncAmbientMusic();
 }
 
@@ -404,6 +432,35 @@ function playStopSuccess() {
   tone.stop(now + 0.43);
 }
 
+function playVehicleHitSound() {
+  if (soundMuted || !audioContext || audioContext.state !== 'running') return;
+  const now = audioContext.currentTime;
+  const settings = CONFIG.audio;
+  const thump = audioContext.createOscillator();
+  const thumpGain = audioContext.createGain();
+  thump.type = 'triangle';
+  thump.frequency.setValueAtTime(settings.vehicleHitLowHz, now);
+  thump.frequency.exponentialRampToValueAtTime(settings.vehicleHitEndHz, now + settings.vehicleHitSeconds);
+  thumpGain.gain.setValueAtTime(settings.vehicleHitGain, now);
+  thumpGain.gain.exponentialRampToValueAtTime(0.0001, now + settings.vehicleHitSeconds);
+  thump.connect(thumpGain);
+  thumpGain.connect(audioContext.destination);
+  thump.start(now);
+  thump.stop(now + settings.vehicleHitSeconds);
+
+  const rattle = audioContext.createOscillator();
+  const rattleGain = audioContext.createGain();
+  rattle.type = 'square';
+  rattle.frequency.setValueAtTime(settings.vehicleHitMetalHz, now);
+  rattle.frequency.exponentialRampToValueAtTime(settings.vehicleHitMetalHz * 0.48, now + settings.vehicleHitSeconds * 0.55);
+  rattleGain.gain.setValueAtTime(settings.vehicleHitMetalGain, now);
+  rattleGain.gain.exponentialRampToValueAtTime(0.0001, now + settings.vehicleHitSeconds * 0.55);
+  rattle.connect(rattleGain);
+  rattleGain.connect(audioContext.destination);
+  rattle.start(now);
+  rattle.stop(now + settings.vehicleHitSeconds * 0.55);
+}
+
 function playShelterDogBark() {
   if (soundMuted) return;
   const bark = shelterDogBarkAudio.cloneNode();
@@ -487,6 +544,7 @@ function tryRestart() {
   document.querySelector('.stage').insertBefore(radioDock, document.querySelector('.controls'));
   lastTime = 0;
   unlockAudio();
+  if (ambientMusicEnabled) ambientMusicAudio.play().catch(() => {});
   gameRadio.start();
   syncAmbientMusic();
 }
@@ -494,12 +552,19 @@ function tryRestart() {
 function togglePause() {
   if (game.state === 'running') {
     game.state = 'paused';
+    radioManuallyPaused = true;
+    gameRadio.stop();
     syncAmbientMusic();
   }
   else if (game.state === 'paused') {
     game.state = 'running';
     lastTime = 0;
     unlockAudio();
+    radioManuallyPaused = false;
+    if (ambientMusicEnabled) {
+      ambientMusicAudio.play().catch(() => {});
+      gameRadio.start();
+    }
     syncAmbientMusic();
   }
 }
@@ -697,7 +762,7 @@ function frame(now) {
       requestHornManeuver(game, field);
     }
     updateTraffic(game, field, step);
-    processTrafficCollision(game, field);
+    if (processTrafficCollision(game, field)) playVehicleHitSound();
     if (game.stops.completed > completedStops) playStopSuccess();
   }
   hornWasPressed = hornPressed;

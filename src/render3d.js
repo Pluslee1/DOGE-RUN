@@ -2968,6 +2968,22 @@ function buildBonePool() {
     roughness: 0.3,
     metalness: 0.1,
   });
+  const plusMaterial = new THREE.MeshToonMaterial({
+    color: config.plusColor,
+    emissive: config.plusEmissiveColor,
+    emissiveIntensity: 0.28,
+    gradientMap: makeToonGradient(),
+  });
+  const plusVerticalGeometry = new THREE.BoxGeometry(
+    config.plusThicknessWorld,
+    config.plusSizeWorld,
+    config.plusDepthWorld,
+  );
+  const plusHorizontalGeometry = new THREE.BoxGeometry(
+    config.plusSizeWorld,
+    config.plusThicknessWorld,
+    config.plusDepthWorld,
+  );
   const stemGeometry = new THREE.CylinderGeometry(
     config.stemRadius,
     config.stemRadius,
@@ -2984,6 +3000,7 @@ function buildBonePool() {
   for (let index = 0; index < config.poolSize; index++) {
     const holder = new THREE.Group();
     const bone = new THREE.Group();
+    const plus = new THREE.Group();
     const stem = new THREE.Mesh(stemGeometry, material);
     stem.rotation.x = Math.PI / 2;
     bone.add(stem);
@@ -2999,6 +3016,13 @@ function buildBonePool() {
       mesh.castShadow = true;
       mesh.receiveShadow = true;
     });
+    const verticalPlusBar = new THREE.Mesh(plusVerticalGeometry, plusMaterial);
+    const horizontalPlusBar = new THREE.Mesh(plusHorizontalGeometry, plusMaterial);
+    for (const mesh of [verticalPlusBar, horizontalPlusBar]) {
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
+      plus.add(mesh);
+    }
 
     const sparkMaterial = new THREE.PointsMaterial({
       color: 0xffdf72,
@@ -3009,10 +3033,10 @@ function buildBonePool() {
     });
     const spark = new THREE.Points(sparkGeometry, sparkMaterial);
     spark.visible = false;
-    holder.add(bone, spark);
+    holder.add(bone, plus, spark);
     holder.visible = false;
     group.add(holder);
-    views.push({ holder, bone, spark, id: null });
+    views.push({ holder, bone, plus, spark, id: null });
   }
 
   return { group, views, byId: new Map() };
@@ -3344,21 +3368,25 @@ function updateBoneMeshes(pool, bones, time) {
       ? Math.min(1, bone.collectT / CONFIG.bones.collectSeconds)
       : 0;
     const bob = Math.sin(time * CONFIG.bones.bobFrequency + bone.bobOffset) * CONFIG.bones.hoverHeight;
+    const isPlus = bone.kind === 'plus';
     view.holder.visible = true;
+    view.bone.visible = !isPlus;
+    view.plus.visible = isPlus;
     view.holder.position.set(
       worldXOf(bone.x, bone.width),
       bone.baseHeight + bob,
       worldZOf(bone.y),
     );
-    view.bone.rotation.y = time * CONFIG.bones.spinRadiansPerSecond;
-    view.bone.position.y = progress * CONFIG.bones.collectRise;
+    const icon = isPlus ? view.plus : view.bone;
+    icon.rotation.y = time * CONFIG.bones.spinRadiansPerSecond;
+    icon.position.y = progress * CONFIG.bones.collectRise;
     const popRatio = CONFIG.bones.collectPopSecondsRatio;
     const boneScale = !collected
       ? 1
       : progress < popRatio
         ? 1 + (CONFIG.bones.collectPopScale - 1) * progress / popRatio
         : CONFIG.bones.collectPopScale * (1 - (progress - popRatio) / (1 - popRatio));
-    view.bone.scale.setScalar(boneScale);
+    icon.scale.setScalar(boneScale);
     view.spark.visible = collected && progress < 1;
     view.spark.position.y = progress * CONFIG.bones.sparkRise;
     view.spark.scale.setScalar(CONFIG.bones.sparkStartScale + progress * CONFIG.bones.sparkScaleGrowth);

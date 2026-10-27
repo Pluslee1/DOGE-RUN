@@ -339,7 +339,7 @@ body {
 }
 
 .drive-controls {
-  --button-size: clamp(58px, 13.5vw, 94px);
+  --button-size: clamp(64px, 15vw, 104px);
   position: absolute;
   display: grid;
   grid-template-columns: var(--button-size) var(--button-size);
@@ -390,10 +390,12 @@ body {
 
 .pause-btn {
   position: absolute;
-  top: calc(12px + env(safe-area-inset-top, 0px));
-  right: calc(14px + env(safe-area-inset-right, 0px));
-  width: 42px;
-  height: 42px;
+  top: var(--pause-top);
+  left: var(--pause-left);
+  right: auto;
+  width: var(--pause-size);
+  height: auto;
+  aspect-ratio: 1;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -441,6 +443,7 @@ body {
   grid-area: horn;
   justify-self: center;
   align-self: end;
+    transform: translateY(-8px);
   width: calc(var(--button-size) * 0.8);
   height: calc(var(--button-size) * 0.8);
   border-radius: 50%;
@@ -452,7 +455,7 @@ body {
 
 @media (max-width: 420px) {
   .drive-controls {
-    --button-size: clamp(58px, 15vw, 72px);
+    --button-size: clamp(64px, 17vw, 80px);
     grid-template-rows: var(--button-size) var(--button-size);
     gap: 9px;
     right: calc(12px + env(safe-area-inset-right, 0px));
@@ -472,7 +475,7 @@ body {
 
 @media (max-height: 560px) and (orientation: landscape) {
   .drive-controls {
-    --button-size: 52px;
+    --button-size: 58px;
     grid-template-rows: var(--button-size) var(--button-size);
     gap: 6px;
     right: calc(10px + env(safe-area-inset-right, 0px));
@@ -480,5 +483,4 @@ body {
   }
 
   .action-btn--speed { height: calc(var(--button-size) * 2 + 6px); }
-  .pause-btn { top: calc(10px + env(safe-area-inset-top, 0px)); }
 }

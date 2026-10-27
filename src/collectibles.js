@@ -62,6 +62,25 @@ export function spawnBoneLine(field, wave) {
 
     if (patternIndex > 0) aheadOffset += lastBoneOffset + bones.patternGapPx;
   }
+
+  if (wave.index % bones.plusEveryWaves === 0) {
+    const lane = openLanes[Math.floor(rng() * openLanes.length)];
+    const laneCenter = laneBounds(lane).center;
+    field.bones.push({
+      id: field.nextId++,
+      kind: 'plus',
+      value: bones.plusBoneValue,
+      lane,
+      x: laneCenter - bones.plusWidthPx / 2,
+      y: wave.y - bones.yOffset - bones.plusAheadPx,
+      width: bones.plusWidthPx,
+      height: bones.plusHeightPx,
+      baseHeight: bones.height,
+      bobOffset: rng() * Math.PI * 2,
+      taken: false,
+      collectT: 0,
+    });
+  }
   field.lineCount += 1;
 }
 
@@ -103,7 +122,7 @@ export function updatePickups(game, field, dt) {
     if (!b.taken && overlaps(b, game.van)) {
       b.taken = true;
       b.collectT = 0;
-      collected += 1;
+      collected += b.value || 1;
     }
   }
   if (collected > 0) game.collected += collected;

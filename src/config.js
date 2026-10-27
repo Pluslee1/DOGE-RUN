@@ -10,6 +10,52 @@ export const CONFIG = {
   },
 
   hud: {
+    topBarLeftX: 10, // RESOLVED — inset the left status cards from the screen edge
+    topBarRightX: 340, // RESOLVED — align resources and onboard dog count at the right
+    topBarY: 12, // RESOLVED — keep the HUD tight to the top edge
+    topBarLeftWidth: 130, // RESOLVED — leave clear space for the centered objective
+    distanceCardHeight: 54, // RESOLVED — fit distance and an adjacent pause control
+    distanceLabelX: 20, // RESOLVED — align the distance label inside its card
+    distanceLabelY: 26, // RESOLVED — place the distance label in the upper card row
+    distanceValueY: 48, // RESOLVED — place the distance value below its label
+    distanceValueMaxWidth: 78, // RESOLVED — keep the value clear of the pause control
+    speedCardY: 76, // RESOLVED — place van speed directly below distance
+    speedCardHeight: 42, // RESOLVED — keep the speed card compact
+    resourceCardHeight: 56, // RESOLVED — fit paired bone and coin counters
+    resourceLabelOffsetX: [34, 96], // RESOLVED — center the two resource labels in their card
+    resourceLabelY: 28, // RESOLVED — position resource labels above their totals
+    resourceValueY: 51, // RESOLVED — align resource totals on one row
+    dogsCardY: 76, // RESOLVED — place onboard dog count below resource counters
+    dogsCardHeight: 42, // RESOLVED — keep onboard count compact
+    taskCardWidth: 184, // RESOLVED — fit the objective between side cards
+    taskCardHeight: 62, // RESOLVED — fit task text and progress bar in the top bar
+    taskTextY: 31, // RESOLVED — align objective text above its progress bar
+    taskBarWidth: 152, // RESOLVED — fit the progress bar within the objective card
+    taskBarHeight: 12, // RESOLVED — make progress easy to see at game scale
+    taskBarY: 48, // RESOLVED — position progress below the objective text
+    taskCardRadius: 14, // RESOLVED — use rounded corners for the objective panel
+    taskStrokeWidth: 2, // RESOLVED — keep the colored objective outline crisp
+    taskTextMaxWidthInset: 14, // RESOLVED — keep task copy inside the objective panel
+    taskBarRadius: 5, // RESOLVED — round the objective progress bar ends
+    stopWarningX: 32, // RESOLVED — inset the temporary stop prompt from the road edges
+    stopWarningHeight: 42, // RESOLVED — keep the temporary stop prompt compact
+    stopWarningTextYInset: 21, // RESOLVED — center stop prompt text in its panel
+    stopWarningTextWidthInset: 84, // RESOLVED — preserve padding around stop prompt text
+    rescueStatusY: 124, // RESOLVED — reserve a slim row for active rescue status
+    rescueStatusHeight: 38, // RESOLVED — keep active stop status compact
+    hitCountY: 84, // RESOLVED — keep the impact counter beneath the objective card
+    stopWarningY: 170, // RESOLVED — show braking prompts below the top HUD
+    boardingCardY: 220, // RESOLVED — show boarding progress only during a stop
+    boardingLabelY: 237, // RESOLVED — center the boarding label in its card
+    boardingBarY: 253, // RESOLVED — place boarding progress beneath its label
+    boardingCardX: 76, // RESOLVED — center boarding progress within the road view
+    boardingCardHeight: 54, // RESOLVED — fit boarding label and progress bar
+    boardingBarX: 102, // RESOLVED — inset the boarding progress bar from its panel
+    boardingBarWidthInset: 204, // RESOLVED — keep the boarding progress bar inside its panel
+    boardingBarHeight: 9, // RESOLVED — keep boarding progress clear but unobtrusive
+    pauseLeftPercent: 21, // RESOLVED — place pause within the distance card
+    pauseTopPercent: 2, // RESOLVED — align pause with the top edge of the distance card
+    pauseSizePercent: 8, // RESOLVED — size pause to fit comfortably inside the distance card
     scoreCardWidth: 80, // RESOLVED — center the score under the rescue task and clear the top-right pause area
     scoreCardY: 78, // RESOLVED — keep the score close to the rescue task without covering the pickup or speed cards
     onboardCardRightOffset: 136, // RESOLVED — leave a clear gap between the compact dog count and the pause button
@@ -541,6 +587,12 @@ export const CONFIG = {
     coinPitchEndRatio: 1.42, // RESOLVED — upward arcade chime sweep
     coinPitchEndTimeRatio: 0.52, // RESOLVED — finish the sweep early in the sound
     coinAttackTimeRatio: 0.12, // RESOLVED — fast chime attack
+    vehicleHitLowHz: 150, // RESOLVED — low impact thump when the van hits traffic
+    vehicleHitEndHz: 52, // RESOLVED — descending thump gives the collision weight
+    vehicleHitMetalHz: 720, // RESOLVED — short metallic rattle makes the impact recognizable
+    vehicleHitGain: 0.16, // RESOLVED — clearly audible collision sound under the engine
+    vehicleHitMetalGain: 0.045, // RESOLVED — brief metallic layer without harshness
+    vehicleHitSeconds: 0.24, // RESOLVED — keep the collision cue short
   },
 
   // RESOLVED: two traffic impacts trigger a visible halt before game over.
@@ -931,6 +983,16 @@ export const CONFIG = {
     patternsPerWave: 3, // RESOLVED — keep pickup trails visible across each traffic gap
     patternSpacingPx: 44, // RESOLVED — readable spacing along the road
     patternGapPx: 48, // RESOLVED — separate each recognizable pickup trail
+    plusEveryWaves: 3, // RESOLVED — place one bonus plus pickup every few traffic waves
+    plusBoneValue: 3, // RESOLVED — reward each plus pickup with three bones
+    plusAheadPx: 160, // RESOLVED — space the plus pickup ahead of the regular bone trail
+    plusWidthPx: 20, // RESOLVED — make the plus easy to collect without filling a lane
+    plusHeightPx: 20, // RESOLVED — give the plus a clear collision target
+    plusSizeWorld: 1.1, // RESOLVED — make the 3D plus visible from the chase camera
+    plusThicknessWorld: 0.28, // RESOLVED — keep the plus shape bold at game scale
+    plusDepthWorld: 0.2, // RESOLVED — give the plus visible 3D depth
+    plusColor: 0xffc928, // RESOLVED — distinguish bonus plus pickups from white bones
+    plusEmissiveColor: 0x8a5400, // RESOLVED — help the plus stand out against the road
     height: 1.2, // RESOLVED — bones float above the asphalt
     hoverHeight: 0.2, // RESOLVED — gentle floating animation range
     spinRadiansPerSecond: 1.8, // RESOLVED — visible but calm bone rotation

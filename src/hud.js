@@ -1,7 +1,6 @@
 import { CONFIG, DEBUG } from './config.js';
 import { scoreOf, missionStatus } from './score.js';
 import { nextStopZone } from './stops.js';
-import { cityConditionLabel } from './city-conditions.js';
 
 const COLOR_LABELS = {
   black: 'Black',
@@ -16,6 +15,42 @@ const COLOR_HEXES = {
   golden: CONFIG.palette.dogFurGolden,
   spotted: CONFIG.palette.dogFurSpotted,
 };
+
+function drawDistanceCard(ctx, game) {
+  const { palette: p, hud } = CONFIG;
+  drawPanel(ctx, hud.topBarLeftX, hud.topBarY, hud.topBarLeftWidth, hud.distanceCardHeight, 'rgba(11,17,31,0.82)', 'rgba(255,255,255,0.16)');
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'middle';
+  ctx.fillStyle = 'rgba(242,242,242,0.66)';
+  ctx.font = '700 9px "Segoe UI", system-ui, sans-serif';
+  ctx.fillText('DISTANCE', hud.distanceLabelX, hud.distanceLabelY);
+  ctx.fillStyle = p.hudText;
+  ctx.font = '900 16px "Segoe UI", system-ui, sans-serif';
+  ctx.fillText(formatDistance(game.distance), hud.distanceLabelX, hud.distanceValueY, hud.distanceValueMaxWidth);
+
+  const kmh = Math.round(Math.abs(game.vanSpeed) / CONFIG.distance.pixelsPerMeter * 3.6);
+  const speedLabel = game.isReversing ? `REV ${kmh}` : `${kmh} km/h`;
+  drawInfoCard(ctx, hud.topBarLeftX, hud.speedCardY, hud.topBarLeftWidth, hud.speedCardHeight, 'VAN SPEED', speedLabel, p.vanAccent);
+}
+
+function drawResourceCard(ctx, game) {
+  const { palette: p, hud } = CONFIG;
+  const x = hud.topBarRightX;
+  const y = hud.topBarY;
+  const width = hud.topBarLeftWidth;
+  drawPanel(ctx, x, y, width, hud.resourceCardHeight, 'rgba(11,17,31,0.82)', 'rgba(255,255,255,0.16)');
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.font = '700 8px "Segoe UI", system-ui, sans-serif';
+  ctx.fillStyle = 'rgba(242,242,242,0.66)';
+  ctx.fillText('BONES', x + hud.resourceLabelOffsetX[0], hud.resourceLabelY);
+  ctx.fillText('COINS', x + hud.resourceLabelOffsetX[1], hud.resourceLabelY);
+  ctx.font = '900 15px "Segoe UI", system-ui, sans-serif';
+  ctx.fillStyle = p.vanAccent;
+  ctx.fillText(String(game.collected), x + hud.resourceLabelOffsetX[0], hud.resourceValueY);
+  ctx.fillText(String(game.coinsCollected || 0), x + hud.resourceLabelOffsetX[1], hud.resourceValueY);
+  ctx.textAlign = 'left';
+}
 
 export function drawHud(ctx, game, dogs = null) {
   const { palette: p, logicalWidth } = CONFIG;
@@ -35,68 +70,45 @@ export function drawHud(ctx, game, dogs = null) {
 
   ctx.textBaseline = 'top';
 
-  // Compact driving stats, like a dashboard above the road.
-  const distance = formatDistance(game.distance);
-  drawStatCard(ctx, 10, 12, 112, 54, 'DISTANCE', distance, p.hudText);
-  drawStatCard(
-    ctx,
-    (logicalWidth - CONFIG.hud.scoreCardWidth) / 2,
-    CONFIG.hud.scoreCardY,
-    CONFIG.hud.scoreCardWidth,
-    44,
-    'SCORE',
-    String(scoreOf(game)),
-    p.vanAccent,
-  );
-
+  drawDistanceCard(ctx, game);
   drawTaskDisplay(ctx, game);
-
+  drawResourceCard(ctx, game);
   drawInfoCard(
     ctx,
-    logicalWidth - CONFIG.hud.onboardCardRightOffset,
-    CONFIG.hud.onboardCardY,
-    CONFIG.hud.onboardCardWidth,
-    CONFIG.hud.onboardCardHeight,
-    'DOGS',
-    `${game.onboardDogs}/${CONFIG.shelter.capacity}`,
+    CONFIG.hud.topBarRightX,
+    CONFIG.hud.dogsCardY,
+    CONFIG.hud.topBarLeftWidth,
+    CONFIG.hud.dogsCardHeight,
+    'RESCUE VAN DOGS',
+    `${game.onboardDogs} / ${CONFIG.shelter.capacity}`,
     p.vanAccent,
   );
 
   const nextZone = nextStopZone(game);
   const shelterStopAhead = Boolean(nextZone?.isShelter);
   const stopLabel = game.shelterUnloading
-    ? 'DOGS ENTERING SHELTER'
+    ? `DOGS ENTERING SHELTER · ${game.shelterUnloading.dogsRemaining} LEFT`
+    : game.onboardDogs >= CONFIG.shelter.capacity
+      ? 'VAN FULL · PARK AT THE DOGE SHELTER'
     : shelterStopAhead && game.parking.state === 'parked'
       ? 'DOGE SHELTER DROP-OFF'
       : game.parking.state === 'parked'
         ? 'DOGS BOARDING'
-    : game.parking.state === 'in-stop-zone-moving'
-      ? 'HOLD BRAKE HERE'
-      : 'DOGS AT NEXT STOP';
-  drawInfoCard(ctx, 12, 78, 188, 44, 'DOG PICKUP', stopLabel, p.vanAccent);
-
-  const kmh = Math.round(Math.abs(game.vanSpeed) / CONFIG.distance.pixelsPerMeter * 3.6);
-  const speedLabel = game.isReversing ? `REVERSE ${kmh} km/h` : `${kmh} km/h`;
-  drawInfoCard(ctx, logicalWidth - 200, 78, 188, 44, 'VAN SPEED', speedLabel, p.hudText);
+        : game.parking.state === 'in-stop-zone-moving'
+          ? 'HOLD BRAKE HERE'
+          : 'DOGS AT NEXT STOP';
+  if (game.onboardDogs >= CONFIG.shelter.capacity || game.parking.state === 'parked' || game.parking.state === 'in-stop-zone-moving' || game.shelterUnloading) {
+    drawInfoCard(ctx, CONFIG.hud.topBarLeftX, CONFIG.hud.rescueStatusY, logicalWidth - CONFIG.hud.topBarLeftX * 2, CONFIG.hud.rescueStatusHeight, 'RESCUE STOP', stopLabel, p.vanAccent);
+  }
   if (game.crashCount > 0) {
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.font = '800 12px "Segoe UI", system-ui, sans-serif';
     ctx.fillStyle = p.vanAccent;
-    ctx.fillText(`HITS ${game.crashCount}/${CONFIG.crash.vanHealth}`, logicalWidth / 2, 128);
+    ctx.fillText(`HITS ${game.crashCount}/${CONFIG.crash.vanHealth}`, logicalWidth / 2, CONFIG.hud.hitCountY);
   }
-  drawRadioBadge(ctx, game);
-  drawInfoCard(ctx, logicalWidth - 196, 132, 184, 46, 'BONES  ·  ROAD COINS', `${game.collected}  ·  ${game.coinsCollected || 0}`, p.vanAccent);
   drawStopHud(ctx, game);
   drawRescueNameNotice(ctx, game);
-  drawConditionBadge(ctx, game);
-
-  if (game.onboardDogs >= CONFIG.shelter.capacity) {
-    const shelterMessage = game.shelterUnloading
-      ? `DOGS WALKING INSIDE · ${game.shelterUnloading.dogsRemaining} LEFT`
-      : 'VAN FULL · PARK AT THE DOGE SHELTER';
-    drawInfoCard(ctx, 16, 188, logicalWidth - 32, 44, 'DOGE SHELTER', shelterMessage, p.vanAccent);
-  }
 
   if (game.parking.state === 'parked') drawBoardingNotice(ctx);
 
@@ -106,21 +118,6 @@ export function drawHud(ctx, game, dogs = null) {
 
   if (DEBUG) drawDebugInfo(ctx, game, dogs);
   ctx.textAlign = 'left';
-}
-
-function drawConditionBadge(ctx, game) {
-  const { hud, palette: p } = CONFIG;
-  const label = cityConditionLabel(game.route?.worldId || 'lagos', game.cityCondition || 'clear');
-  drawInfoCard(
-    ctx,
-    hud.environmentCardX,
-    hud.environmentCardY,
-    hud.environmentCardWidth,
-    hud.environmentCardHeight,
-    'CITY EVENT',
-    label,
-    p.vanAccent,
-  );
 }
 
 function drawRescueNameNotice(ctx, game) {
@@ -236,24 +233,6 @@ function drawInfoCard(ctx, x, y, width, height, label, value, accent) {
   ctx.fillText(value, x + 12, y + 31, width - 24);
 }
 
-function drawRadioBadge(ctx, game) {
-  const { palette: p } = CONFIG;
-  drawPanel(ctx, 12, 132, 184, 46, 'rgba(11,17,31,0.72)', 'rgba(255,255,255,0.12)');
-  ctx.textAlign = 'left';
-  ctx.textBaseline = 'middle';
-  ctx.fillStyle = p.vanAccent;
-  ctx.font = '800 11px "Segoe UI", system-ui, sans-serif';
-  const route = game.route ? `${game.route.flag} ${game.route.worldName}  ·  LEVEL ${game.route.level + 1}` : 'DOGE RESCUE ROUTE';
-  ctx.fillText(route, 24, 145, 160);
-  ctx.fillStyle = 'rgba(242,242,242,0.72)';
-  ctx.font = '500 10px "Segoe UI", system-ui, sans-serif';
-  const powers = [
-    game.shieldTimer > 0 ? `🛡 ${Math.ceil(game.shieldTimer)}s` : '',
-    game.magnetTimer > 0 ? `🧲 ${Math.ceil(game.magnetTimer)}s` : '',
-  ].filter(Boolean).join('  ');
-  ctx.fillText(powers || (game.route?.name || `${game.rescued} DOGS SAFE`), 24, 162, 160);
-}
-
 function drawBoardingNotice(ctx) {
   const { logicalWidth: w, palette: p } = CONFIG;
   drawPanel(ctx, 74, 570, w - 148, 56, 'rgba(11,17,31,0.88)', 'rgba(243,185,50,0.8)');
@@ -284,22 +263,6 @@ function drawStopHud(ctx, game) {
   if (!zone) return;
 
   const distanceToStart = zone.startZ - game.distance;
-  const distanceLabel = distanceToStart > 0
-    ? `${Math.ceil(distanceToStart)} m`
-    : `${Math.max(0, Math.ceil(zone.endZ - game.distance))} m left`;
-  const stopLabel = zone.specialLabel ? `SPECIAL · ${zone.specialLabel}` : 'NEXT STOP';
-  drawInfoCard(ctx, 12, 184, 204, 44, stopLabel, `${zone.name}  ·  ${distanceLabel}`, p.vanAccent);
-  drawPanel(ctx, w - 164, 184, 152, 44, 'rgba(11,17,31,0.76)', 'rgba(255,255,255,0.12)');
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.fillStyle = 'rgba(242,242,242,0.62)';
-  ctx.font = '700 9px "Segoe UI", system-ui, sans-serif';
-  ctx.fillText('STOPS', w - 88, 197);
-  ctx.fillStyle = p.vanAccent;
-  ctx.font = '900 16px "Segoe UI", system-ui, sans-serif';
-  ctx.fillText(`${game.stops.completed} / ${stops.goal}`, w - 88, 214);
-  ctx.textAlign = 'left';
-
   const brakingDistance = (game.vanSpeed * game.vanSpeed)
     / (2 * CONFIG.speed.brakeStrength * CONFIG.distance.pixelsPerMeter);
   const warningDistance = Math.max(
@@ -313,31 +276,31 @@ function drawStopHud(ctx, game) {
         ? 'STOP ZONE  ·  HOLD BRAKE'
         : 'MOVE TO RIGHT LANE';
     }
-    drawPanel(ctx, 32, 238, w - 64, 42, 'rgba(245, 193, 38, 0.96)', 'rgba(255,255,255,0.45)');
+    drawPanel(ctx, CONFIG.hud.stopWarningX, CONFIG.hud.stopWarningY, w - CONFIG.hud.stopWarningX * 2, CONFIG.hud.stopWarningHeight, 'rgba(245, 193, 38, 0.96)', 'rgba(255,255,255,0.45)');
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillStyle = '#191b20';
     ctx.font = '900 16px "Segoe UI", system-ui, sans-serif';
-    ctx.fillText(warning, w / 2, 259, w - 84);
+    ctx.fillText(warning, w / 2, CONFIG.hud.stopWarningY + CONFIG.hud.stopWarningTextYInset, w - CONFIG.hud.stopWarningTextWidthInset);
     ctx.textAlign = 'left';
   }
 
   if (game.stops.dwellProgress > 0 && zone.state === 'active') {
-    drawPanel(ctx, 76, 288, w - 152, 54, 'rgba(11,17,31,0.9)', 'rgba(255,255,255,0.2)');
+    drawPanel(ctx, CONFIG.hud.boardingCardX, CONFIG.hud.boardingCardY, w - CONFIG.hud.boardingCardX * 2, CONFIG.hud.boardingCardHeight, 'rgba(11,17,31,0.9)', 'rgba(255,255,255,0.2)');
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillStyle = p.hudText;
     ctx.font = '900 14px "Segoe UI", system-ui, sans-serif';
-    ctx.fillText('BOARDING...', w / 2, 305);
-    const barX = 102;
-    const barY = 321;
-    const barWidth = w - 204;
+    ctx.fillText('BOARDING...', w / 2, CONFIG.hud.boardingLabelY);
+    const barX = CONFIG.hud.boardingBarX;
+    const barY = CONFIG.hud.boardingBarY;
+    const barWidth = w - CONFIG.hud.boardingBarWidthInset;
     ctx.beginPath();
-    ctx.roundRect(barX, barY, barWidth, 9, 5);
+    ctx.roundRect(barX, barY, barWidth, CONFIG.hud.boardingBarHeight, CONFIG.hud.taskBarRadius);
     ctx.fillStyle = 'rgba(255,255,255,0.2)';
     ctx.fill();
     ctx.beginPath();
-    ctx.roundRect(barX, barY, barWidth * game.stops.dwellProgress, 9, 5);
+    ctx.roundRect(barX, barY, barWidth * game.stops.dwellProgress, CONFIG.hud.boardingBarHeight, CONFIG.hud.taskBarRadius);
     ctx.fillStyle = p.stopSuccess;
     ctx.fill();
     ctx.textAlign = 'left';
@@ -438,18 +401,18 @@ function drawTaskDisplay(ctx, game) {
   const progress = `${task.progress} / ${task.count}`;
 
   // Background bubble - cartoon style
-  const bubbleWidth = 200;
-  const bubbleHeight = 56;
+  const bubbleWidth = CONFIG.hud.taskCardWidth;
+  const bubbleHeight = CONFIG.hud.taskCardHeight;
   const bubbleX = (w - bubbleWidth) / 2;
-  const bubbleY = 12;
-  const radius = 28;
+  const bubbleY = CONFIG.hud.topBarY;
+  const radius = CONFIG.hud.taskCardRadius;
 
   ctx.beginPath();
   ctx.roundRect(bubbleX, bubbleY, bubbleWidth, bubbleHeight, radius);
   ctx.fillStyle = 'rgba(11, 13, 23, 0.85)';
   ctx.fill();
   ctx.strokeStyle = colorHex;
-  ctx.lineWidth = 3;
+  ctx.lineWidth = CONFIG.hud.taskStrokeWidth;
   ctx.stroke();
 
   // Task text
@@ -457,31 +420,31 @@ function drawTaskDisplay(ctx, game) {
   ctx.textBaseline = 'middle';
 
   // "Save X dogs"
-  ctx.font = '700 20px "Segoe UI", system-ui, sans-serif';
+  ctx.font = '800 16px "Segoe UI", system-ui, sans-serif';
   ctx.fillStyle = p.hudText;
-  ctx.fillText(`Save ${task.count} ${label.toLowerCase()} dogs`, w / 2, bubbleY + 22);
+  ctx.fillText(`Save ${task.count} ${label.toLowerCase()} dogs`, w / 2, CONFIG.hud.taskTextY, bubbleWidth - CONFIG.hud.taskTextMaxWidthInset);
 
   // Progress bar
-  const barWidth = 160;
-  const barHeight = 10;
+  const barWidth = CONFIG.hud.taskBarWidth;
+  const barHeight = CONFIG.hud.taskBarHeight;
   const barX = (w - barWidth) / 2;
-  const barY = bubbleY + 38;
+  const barY = CONFIG.hud.taskBarY;
   const progressRatio = Math.min(task.progress / task.count, 1);
 
   // Bar background
   ctx.beginPath();
-  ctx.roundRect(barX, barY, barWidth, barHeight, 5);
+  ctx.roundRect(barX, barY, barWidth, barHeight, CONFIG.hud.taskBarRadius);
   ctx.fillStyle = 'rgba(242, 242, 242, 0.2)';
   ctx.fill();
 
   // Bar fill
   ctx.beginPath();
-  ctx.roundRect(barX, barY, barWidth * progressRatio, barHeight, 5);
+  ctx.roundRect(barX, barY, barWidth * progressRatio, barHeight, CONFIG.hud.taskBarRadius);
   ctx.fillStyle = colorHex;
   ctx.fill();
 
   // Progress text
-  ctx.font = '600 14px "Segoe UI", system-ui, sans-serif';
+  ctx.font = '700 10px "Segoe UI", system-ui, sans-serif';
   ctx.fillStyle = p.hudText;
   ctx.fillText(progress, w / 2, barY + barHeight / 2 + 1);
 }

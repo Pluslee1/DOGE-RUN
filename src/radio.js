@@ -10,7 +10,7 @@ const MUSIC_TAGS = new Set([
 ]);
 const NON_MUSIC_TAGS = new Set(['talk', 'news', 'sports', 'sport', 'religion', 'religious', 'podcast', 'politics']);
 
-export function createGameRadio({ audio, label, status, playButton, previousButton, nextButton }) {
+export function createGameRadio({ audio, label, status, playButton, previousButton, nextButton, onPlaybackChange = () => {} }) {
   let stations = [];
   let stationIndex = 0;
   let activeWorld = null;
@@ -94,6 +94,7 @@ export function createGameRadio({ audio, label, status, playButton, previousButt
         render();
         if (stations.length === 0) {
           statusMessage = 'No playable stations found for this map';
+          if (autoPlayRequested) onPlaybackChange('error');
           render();
         } else if (autoPlayRequested) {
           await tune(stationIndex, true);
@@ -109,6 +110,7 @@ export function createGameRadio({ audio, label, status, playButton, previousButt
       statusMessage = navigator.onLine
         ? 'Radio directory unavailable · try again later'
         : 'Connect to the internet to use radio';
+      if (autoPlayRequested) onPlaybackChange('error');
       if (lastError) console.info('Online radio station lookup failed:', lastError.message);
       render();
     }
@@ -127,8 +129,10 @@ export function createGameRadio({ audio, label, status, playButton, previousButt
     if (startPlayback) {
       try {
         await audio.play();
+        onPlaybackChange('playing');
       } catch {
         statusMessage = 'Could not play this stream · try another channel';
+        onPlaybackChange('error');
       }
       renderPlaybackStatus();
     }
@@ -144,19 +148,24 @@ export function createGameRadio({ audio, label, status, playButton, previousButt
     const station = currentStation();
     if (!station) return;
     if (!audio.paused) {
+      onPlaybackChange('paused');
       audio.pause();
       statusMessage = '';
       render();
       return;
     }
     if (!audio.src || audio.src !== station.url) {
+      onPlaybackChange('starting');
       await tune(stationIndex, true);
       return;
     }
+    onPlaybackChange('starting');
     try {
       await audio.play();
+      onPlaybackChange('playing');
     } catch {
       statusMessage = 'Could not play this stream · try another channel';
+      onPlaybackChange('error');
     }
     renderPlaybackStatus();
   });
@@ -168,12 +177,14 @@ export function createGameRadio({ audio, label, status, playButton, previousButt
 
   function start() {
     autoPlayRequested = true;
+    onPlaybackChange('starting');
     if (stations.length > 0 && !loadingStations) tune(stationIndex, true);
   }
 
   function stop() {
     autoPlayRequested = false;
     audio.pause();
+    onPlaybackChange('stopped');
   }
 
   render();
