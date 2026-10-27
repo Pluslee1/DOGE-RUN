@@ -30,6 +30,21 @@ const DAYLIGHT = CONFIG.daylight;
 const ROAD_VISUAL = CONFIG.roadVisual;
 const ROAD_SURFACE = CONFIG.roadSurface;
 
+function getRenderProfile() {
+  const threads = Number(navigator.hardwareConcurrency) || 0;
+  const memoryGb = Number(navigator.deviceMemory) || 0;
+  const touchDevice = window.matchMedia?.('(pointer: coarse)').matches || false;
+  const lowPower = touchDevice
+    || (threads > 0 && threads <= CONFIG.render.lowPowerThreadCount)
+    || (memoryGb > 0 && memoryGb <= CONFIG.render.lowPowerMemoryGb);
+  return {
+    pixelRatio: lowPower ? CONFIG.render.lowPowerPixelRatio : CONFIG.render.maxPixelRatio,
+    antialias: lowPower ? CONFIG.render.lowPowerAntialias : true,
+    shadows: lowPower ? CONFIG.render.lowPowerShadows : true,
+    powerPreference: lowPower ? 'low-power' : 'high-performance',
+  };
+}
+
 // --- Roadside scenery ---
 // Keep houses and props clear of the road and the dog waiting area.
 const DOG_SIDE_CLEARANCE = CONFIG.scenery.dogSideClearanceWorld;
@@ -42,9 +57,14 @@ const SCENERY_RECYCLE_Z = ROAD_START_Z - CONFIG.scenery.recycleBehindZ;
 const SCENERY_WRAP_DISTANCE = SCENERY_POOL_SIZE * SCENERY_SPACING;
 
 export function createRenderer3D(canvas) {
+  const renderProfile = getRenderProfile();
   let renderer;
   try {
-    renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+    renderer = new THREE.WebGLRenderer({
+      canvas,
+      antialias: renderProfile.antialias,
+      powerPreference: renderProfile.powerPreference,
+    });
   } catch (e) {
     console.error('WebGLRenderer creation failed:', e);
     alert('WebGL error: ' + e.message);
@@ -57,9 +77,9 @@ export function createRenderer3D(canvas) {
     throw new Error('No WebGL context');
   }
 
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, CONFIG.render.maxPixelRatio));
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, renderProfile.pixelRatio));
   renderer.outputColorSpace = THREE.SRGBColorSpace;
-  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.enabled = renderProfile.shadows;
   renderer.shadowMap.type = THREE.PCFShadowMap;
 
   const scene = new THREE.Scene();
@@ -554,7 +574,7 @@ export function createRenderer3D(canvas) {
 
     resize(cssWidth, cssHeight, dpr) {
       try {
-        renderer.setPixelRatio(Math.min(dpr, CONFIG.render.maxPixelRatio));
+        renderer.setPixelRatio(Math.min(dpr, renderProfile.pixelRatio));
         renderer.setSize(cssWidth, cssHeight, false);
         camera.aspect = cssWidth / cssHeight;
         camera.updateProjectionMatrix();
@@ -1871,10 +1891,16 @@ function createShelterStreetCar(settings, index) {
 }
 
 export function createGaragePreview(canvas) {
-  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, CONFIG.render.maxPixelRatio));
+  const renderProfile = getRenderProfile();
+  const renderer = new THREE.WebGLRenderer({
+    canvas,
+    antialias: renderProfile.antialias,
+    alpha: true,
+    powerPreference: renderProfile.powerPreference,
+  });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, renderProfile.pixelRatio));
   renderer.outputColorSpace = THREE.SRGBColorSpace;
-  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.enabled = renderProfile.shadows;
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0x172337);
   const camera = new THREE.PerspectiveCamera(34, 1, 0.1, 50);

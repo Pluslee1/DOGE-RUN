@@ -7,6 +7,11 @@ export const CONFIG = {
   logicalHeight: 800,
   render: {
     maxPixelRatio: 1.0, // RESOLVED — keep the 480 x 800 game render light on high-DPI displays
+    lowPowerPixelRatio: 0.8, // RESOLVED — reduce fill-rate on phones and lower-power devices
+    lowPowerThreadCount: 4, // RESOLVED — use a lighter render profile on devices with few CPU threads
+    lowPowerMemoryGb: 4, // RESOLVED — use a lighter render profile when reported memory is limited
+    lowPowerShadows: false, // RESOLVED — turn off costly shadows on the lighter device profile
+    lowPowerAntialias: false, // RESOLVED — skip multisample antialiasing on the lighter profile
   },
 
   hud: {
@@ -181,15 +186,15 @@ export const CONFIG = {
   // speed (game.speed) is the ramp target; game.vanSpeed is the effective speed
   // after applying SPEED button boost and BRAKE button deceleration.
   speed: {
-    start: 400, // RESOLVED — restore the game's original fast arcade starting pace
-    max: 1000, // RESOLVED — restore the original high-speed cruising cap
-    rampSeconds: 90, // RESOLVED — restore the quicker original acceleration ramp
+    start: 500, // RESOLVED — start at a brisker arcade pace
+    max: 1250, // RESOLVED — raise the normal cruising speed for faster runs
+    rampSeconds: 75, // RESOLVED — reach top cruising speed sooner
     distanceBonusMax: 180, // RESOLVED — add a modest speed increase over a long run
     distanceBonusFullMeters: 12000, // RESOLVED — reach the full distance speed bonus alongside late-run traffic difficulty
     // SPEED button: hold to boost above the ramp speed.
-    boostMultiplier: 1.8,   // RESOLVED — hold → ramp speed × 1.8 for a strong boost
-    maxBoost: 1800,         // RESOLVED — restore original boosted speed cap
-    boostAccel: 1700,       // RESOLVED — restore quick, noticeable nitro acceleration
+    boostMultiplier: 1.9,   // RESOLVED — hold → ramp speed × 1.9 for a stronger boost
+    maxBoost: 2300,         // RESOLVED — allow a higher boosted speed cap
+    boostAccel: 2000,       // RESOLVED — reach the faster boost speed promptly
     // BRAKE button: hold to slow down, can stop fully.
     brakeStrength: 1450,    // RESOLVED — restore the original sharp braking response
     reverseMax: 260,        // RESOLVED — controlled reverse speed outside an active yellow bay
@@ -267,7 +272,7 @@ export const CONFIG = {
     sunsetFogColor: 0xd78a70, // RESOLVED — warm haze below the sunset horizon
     sunsetSunIntensity: 0.82, // RESOLVED — warm late-day lighting without hiding road detail
     sunsetHemisphereIntensity: 0.9, // RESOLVED — retain readable shaded surfaces at sunset
-    petalCount: 80, // RESOLVED — a lively stream of low-cost petals through Sakura City
+    petalCount: 36, // RESOLVED — lighter animated blossom stream for smoother Sakura City play
     petalColor: 0xffb7cf, // RESOLVED — soft cherry blossom pink
     petalFallSpeed: 2.7, // RESOLVED — gentle drifting petals
     petalWindSpeed: 1.2, // RESOLVED — soft sideways breeze for blossom petals
@@ -963,8 +968,8 @@ export const CONFIG = {
     minSameLaneSpacing: 260, // RESOLVED — preserve room for long tankers and trucks in one lane
     blockedLanesMin: 1,
     blockedLanesMax: 2, // RESOLVED — later waves may use two lanes while keeping one open
-    bayClearBeforeMeters: 100, // RESOLVED — give traffic room to leave the rescue lane shortly before a yellow bay
-    bayClearAfterMeters: 12, // RESOLVED — reopen the rescue lane soon after a marked bay
+    bayClearBeforeMeters: 35, // RESOLVED — keep the bay entrance clear while allowing traffic between bays
+    bayClearAfterMeters: 8, // RESOLVED — reopen the rescue lane shortly after a marked bay
     laneChangeSeconds: 0.72, // RESOLVED — smooth lane changes complete before the bay entrance
     laneChangeSafeGapPx: 245, // RESOLVED — only merge when the destination lane has room
     laneChangeVehicleGapRatio: 0.5, // RESOLVED — add half the combined vehicle lengths to the merge gap
@@ -2102,17 +2107,17 @@ export const CONFIG = {
     roadsideGroundWidth: 40, // RESOLVED — cover the Sakura neighborhood apron behind the shops and houses
     japanPaverTextureSize: 256, // RESOLVED — repeatable stone texture resolution
     japanPaverTilesPerAxis: 8, // RESOLVED — visible stone-block grid on Sakura City pavement
-    japanPetalCountPerSide: 100, // RESOLVED — scattered blossom petals make the pavement feel lived in
+    japanPetalCountPerSide: 40, // RESOLVED — lighter pavement scatter keeps Sakura City rendering smooth
     japanPaverBase: 0xb8b0a4, // RESOLVED — warm gray Sakura City stone paving
     japanPaverAlternate: 0xc8c0b4, // RESOLVED — subtle tile variation across the ground
     japanPaverGrout: 0x8c867e, // RESOLVED — clear seams keep the ground from reading as a plain slab
     japanTimber: 0x604332, // RESOLVED — dark exposed wooden frames on Japanese homes
     japanPaper: 0xf0e7d2, // RESOLVED — warm shoji sliding-door panels
     japanGarden: 0x6a8b57, // RESOLVED — small green house-front garden patches
-    japanCrowdEvery: 4, // RESOLVED — small pedestrian groups add street life while keeping rendering light
-    japanStreetDogEvery: 8, // RESOLVED — place neighborhood dogs at spaced intervals
-    japanSecondRowEvery: 6, // RESOLVED — add compact homes behind selected storefronts
-    japanThirdRowEvery: 9, // RESOLVED — occasional distant homes fill the back of the Sakura blocks
+    japanCrowdEvery: 8, // RESOLVED — smaller pedestrian count keeps Sakura City responsive
+    japanStreetDogEvery: 12, // RESOLVED — dogs remain visible at wider intervals
+    japanSecondRowEvery: 10, // RESOLVED — reduce background house geometry while keeping depth
+    japanThirdRowEvery: 15, // RESOLVED — sparse distant homes preserve the layered skyline
     buildingColorsUSA: [0x9b564a, 0x59748b, 0xd6b47b, 0x555664], // RESOLVED — brick, steel, and desert USA facades
     roofColorUSA: 0x343a46, // RESOLVED — dark urban roofline
     usaSignColor: 0xf2c84b, // RESOLVED — bright American road and diner signage
