@@ -6,12 +6,12 @@ export const CONFIG = {
   logicalWidth: 480,
   logicalHeight: 800,
   render: {
-    maxPixelRatio: 1.0, // RESOLVED — keep the 480 x 800 game render light on high-DPI displays
-    lowPowerPixelRatio: 0.8, // RESOLVED — reduce fill-rate on phones and lower-power devices
-    lowPowerThreadCount: 4, // RESOLVED — use a lighter render profile on devices with few CPU threads
-    lowPowerMemoryGb: 4, // RESOLVED — use a lighter render profile when reported memory is limited
-    lowPowerShadows: false, // RESOLVED — turn off costly shadows on the lighter device profile
-    lowPowerAntialias: false, // RESOLVED — skip multisample antialiasing on the lighter profile
+    maxPixelRatio: 1.5, // RESOLVED — render sharper on high-DPI displays
+    lowPowerPixelRatio: 1.0, // RESOLVED — retain crisp native-resolution rendering on phones
+    lowPowerThreadCount: 2, // RESOLVED — reserve reduced resolution for very limited CPUs
+    lowPowerMemoryGb: 2, // RESOLVED — reserve reduced resolution for very limited memory
+    lowPowerShadows: true, // RESOLVED — preserve depth and shape detail on phones
+    lowPowerAntialias: true, // RESOLVED — keep edges smooth on every device profile
   },
 
   hud: {
