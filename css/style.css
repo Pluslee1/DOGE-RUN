@@ -161,7 +161,7 @@ body {
 .garage-row button:disabled { opacity: .46; cursor: default; }
 .career-message { min-height: 30px; margin: 10px 0 8px; }
 .career-start { width: 100%; padding: 12px; font-size: 16px; }
-.shelter-entry { margin: 0 0 12px; color: #123426; background: #91edbc; }
+.shelter-entry { display: block; min-height: 44px; margin: 0 0 12px; border: 1px solid #b7f7d4; color: #123426; background: linear-gradient(135deg,#a6f4c9,#6fdaa2); box-shadow: 0 5px 16px #64d99b30, inset 0 1px 0 #ffffff9c; }
 
 @media (max-width: 360px) {
   .career-card { padding: 17px 13px; }
