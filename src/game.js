@@ -35,6 +35,11 @@ export function createGame(seed = Date.now()) {
     coinsCollected: 0,
     coinsEarned: 0,
     shieldTimer: 0,
+    slipperyTimer: 0,
+    potholeTimer: 0,
+    oilImpactTimer: 0,
+    oilDriftTimer: 0,
+    oilDriftDirection: 1,
     magnetTimer: 0,
     upgrades: {},
     route: null,
@@ -127,6 +132,10 @@ export function update(game, dt, laneStep = 0, buttons = null, jumpPressed = fal
   if (game.state !== 'running') return false;
 
   game.van.previousX = game.van.x;
+  game.slipperyTimer = Math.max(0, game.slipperyTimer - dt);
+  game.potholeTimer = Math.max(0, game.potholeTimer - dt);
+  game.oilImpactTimer = Math.max(0, game.oilImpactTimer - dt);
+  game.oilDriftTimer = Math.max(0, game.oilDriftTimer - dt);
 
   if (laneStep && !game.parking.unloadingInProgress && !game.parking.autoHoldForRescue && game.crashState !== 'stopping') {
     moveLane(game, Math.sign(laneStep));
@@ -134,14 +143,27 @@ export function update(game, dt, laneStep = 0, buttons = null, jumpPressed = fal
 
   const van = game.van;
   if (van.slideT < 1) {
-    van.slideT = Math.min(1, van.slideT + dt / CONFIG.lanes.slideSeconds);
+    van.slideT = Math.min(1, van.slideT + dt / (van.slideDuration || CONFIG.lanes.slideSeconds));
     van.x = van.slideFrom + (van.slideTo - van.slideFrom) * easeOut(van.slideT);
   } else {
     van.x = van.slideTo;
+    van.slideDuration = CONFIG.lanes.slideSeconds;
+  }
+
+  if (game.oilDriftTimer > 0) {
+    const progress = 1 - game.oilDriftTimer / CONFIG.obstacles.oilDriftSeconds;
+    van.x += Math.sin(progress * Math.PI) * CONFIG.obstacles.oilDriftDistance * game.oilDriftDirection;
   }
 
   game.elapsed += dt;
   game.cameraShake = Math.max(0, game.cameraShake - CONFIG.crash.shakeDecayPerSecond * dt);
+  if (game.oilImpactTimer > 0) {
+    const progress = 1 - game.oilImpactTimer / CONFIG.obstacles.oilImpactSeconds;
+    game.cameraShake = Math.max(
+      game.cameraShake,
+      Math.sin(progress * Math.PI) * CONFIG.obstacles.oilHitShake,
+    );
+  }
   game.companionTimer = Math.max(0, game.companionTimer - dt);
   if (game.companionTimer === 0) game.companionMessage = CONFIG.companion.idleMessage;
 
@@ -311,7 +333,11 @@ function applyThrottle(game, dt, buttons) {
     return;
   }
 
-  const normalSpeed = game.speed;
+  // A pothole impact keeps the van noticeably slower for a short stretch,
+  // even if the player is holding gas.
+  const normalSpeed = game.potholeTimer > 0
+    ? game.speed * CONFIG.obstacles.potholeSpeedMultiplier
+    : game.speed;
   const speedHeld = buttons && buttons.isPressed('speed');
   const physicalBrakeHeld = Boolean(buttons && buttons.isPressed('brake'));
   if (!physicalBrakeHeld) game.parking.autoReleasedBrake = false;
@@ -430,6 +456,8 @@ function moveLane(game, dir) {
   van.slideFrom = van.x;
   van.slideTo = laneVanX(target);
   van.slideT = 0;
+  van.slideDuration = CONFIG.lanes.slideSeconds
+    * (game.slipperyTimer > 0 ? CONFIG.obstacles.oilSlideMultiplier : 1);
 }
 
 function easeOut(p) {

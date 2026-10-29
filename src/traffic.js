@@ -1,5 +1,5 @@
 import { CONFIG } from './config.js';
-import { LANE_COUNT, RESCUE_LANE, laneBounds } from './world.js';
+import { LANE_COUNT, laneBounds } from './world.js';
 
 let nextVehicleId = 0;
 
@@ -20,6 +20,7 @@ export function updateTraffic(game, field, dt) {
   const trafficSpeed = trafficBaseSpeed * CONFIG.traffic.speedRatio;
 
   for (const c of field.cars) {
+    if (!game.isJumping) c.jumpPassTarget = false;
     const passing = c.hornManeuver
       && (c.hornManeuver.phase === 'passing' || c.hornManeuver.phase === 'merging');
     const maneuverSpeed = passing
@@ -30,12 +31,17 @@ export function updateTraffic(game, field, dt) {
       : 0;
     const carSpeed = trafficSpeed + maneuverSpeed;
     const jumpGap = game.van.y - (c.y + c.depth);
-    const jumpPass = game.isJumping
-      && game.vanSpeed > trafficSpeed
+    const canBeginJumpPass = game.isJumping
       && c.lane === game.van.lane
       && c.y < game.van.y
       && jumpGap <= CONFIG.traffic.jumpOvertakeRangePx;
-    const jumpOvertake = jumpPass ? CONFIG.traffic.jumpOvertakeBoostPxPerSecond : 0;
+    if (canBeginJumpPass) c.jumpPassTarget = true;
+    const jumpPass = game.isJumping && c.jumpPassTarget;
+    // Maintain enough relative movement to move the whole vehicle behind the
+    // van before the fixed jump arc lands, even if the player is braking.
+    const jumpOvertake = jumpPass
+      ? Math.max(0, CONFIG.traffic.jumpPassMinimumRelativeSpeedPxPerSecond - (game.vanSpeed - carSpeed))
+      : 0;
     const relativeScroll = (game.vanSpeed - carSpeed + jumpOvertake) * dt;
     c.y += relativeScroll;
     c.travel += Math.abs(relativeScroll);
@@ -43,10 +49,7 @@ export function updateTraffic(game, field, dt) {
     advanceLaneChange(c, dt);
   }
 
-  for (const car of field.cars) {
-    updateHornManeuver(car, field, dt);
-    updateBayLaneBehavior(car, field, game);
-  }
+  for (const car of field.cars) updateHornManeuver(car, field, dt);
 
   field.cars = field.cars.filter(keepCar(field));
 
@@ -159,9 +162,10 @@ function spawnWave(field, game, difficulty) {
   const occupied = [];
 
   const lanes = pickBlockedLanes(rng, difficulty);
-  if (field.waveCount === 1 && lanes.length > 0) {
-    const visibleApproachLane = Math.floor(LANE_COUNT / 2);
-    lanes.splice(0, lanes.length, visibleApproachLane, ...lanes.filter((lane) => lane !== visibleApproachLane));
+  if (field.waveCount <= 2 && lanes.length > 0) {
+    // Keep the first two hazard waves backed by a contiguous two-lane gap so
+    // the guaranteed oil slick and pothole both have a fair spawning lane.
+    lanes.splice(0, lanes.length, rng() < 0.5 ? 0 : LANE_COUNT - 1);
   }
 
   let tankerAssigned = false;
@@ -173,7 +177,6 @@ function spawnWave(field, game, difficulty) {
     const laneY = waveY + rng() * CONFIG.traffic.waveDepthSpreadPx;
     const actualLead = game.van.y - laneY;
     const worldDistance = game.distance + actualLead / CONFIG.distance.pixelsPerMeter;
-    if (lane === RESCUE_LANE && isBayApproach(game, worldDistance)) continue;
     if (!laneHasRoom(field, lane, laneY)) continue;
     const forceTanker = guaranteeTanker && !tankerAssigned;
     placeInLane(field, lane, laneY, worldDistance, rng, forceTanker);
@@ -194,6 +197,7 @@ function spawnWave(field, game, difficulty) {
       y: waveY,
       gapStart: gap.left,
       gapEnd: gap.right,
+      difficulty,
     });
   }
 }
@@ -286,6 +290,8 @@ function trafficDimensions(type) {
     tanker: [traffic.tankerWidth, traffic.tankerDepth],
     van: [traffic.vanWidth, traffic.vanDepth],
     truck: [traffic.truckWidth, traffic.truckDepth],
+    suv: [traffic.vanWidth, traffic.vanDepth],
+    hatchback: [traffic.carWidth * 0.92, traffic.carDepth * 0.9],
   };
   const [width, depth] = byType[type] || byType.sedan;
   return { width, depth };
@@ -300,6 +306,8 @@ function trafficColor(type, rng) {
     tanker: [traffic.tankerCabColor],
     van: traffic.vanColors,
     truck: traffic.truckColors,
+    suv: traffic.suvColors,
+    hatchback: traffic.hatchbackColors,
   };
   const palette = Array.isArray(palettes[type]) ? palettes[type] : [palettes[type]];
   return palette[Math.floor(rng() * palette.length)];
@@ -313,7 +321,7 @@ function pickBlockedLanes(rng, difficulty) {
   );
   const lanes = [];
 
-  // Traffic may use every lane between bays. Bay approaches are cleared below.
+  // Traffic may use every lane, including the yellow rescue lane.
   for (let lane = 0; lane < LANE_COUNT && lanes.length < count; lane++) {
     if (rng() < 0.5) lanes.push(lane);
   }
@@ -328,29 +336,6 @@ function isBayApproach(game, distance) {
     distance >= zone.startZ - CONFIG.traffic.bayClearBeforeMeters
     && distance <= zone.endZ + CONFIG.traffic.bayClearAfterMeters
   ));
-}
-
-function updateBayLaneBehavior(car, field, game) {
-  if (!isBayApproach(game, car.worldDistance)) return;
-
-  // Clearing an upcoming rescue bay takes priority over a horn pass.
-  car.hornManeuver = null;
-
-  // A car that was moving into the rescue lane turns back before reaching a bay.
-  if (car.targetLane === RESCUE_LANE) {
-    startLaneChange(car, car.lane);
-  }
-  if (car.lane !== RESCUE_LANE || car.targetLane !== null) return;
-
-  const candidates = [];
-  for (let offset = 1; offset < LANE_COUNT; offset++) {
-    const left = car.lane - offset;
-    const right = car.lane + offset;
-    if (left >= 0) candidates.push(left);
-    if (right < LANE_COUNT) candidates.push(right);
-  }
-  const safeLane = candidates.find((lane) => hasSafeLaneChangeGap(car, field, lane));
-  if (safeLane !== undefined) startLaneChange(car, safeLane);
 }
 
 function hasSafeLaneChangeGap(car, field, targetLane) {

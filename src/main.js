@@ -520,8 +520,12 @@ function startRun(seed) {
   hornWasPressed = false;
 
   field.onWave = (wave) => {
-    spawnBoneLine(pickups, wave);
-    spawnRoadObstacles(obstacles, wave);
+    // Traffic spawns far beyond the screen for a slow approach. Bone trails
+    // need their own visible lead or the recycle rule removes them unseen.
+    spawnBoneLine(pickups, { ...wave, y: game.van.y - CONFIG.bones.spawnLeadPx });
+    // Traffic waves begin far ahead of the camera; hazards need a nearer
+    // screen-space lead or their recycle bounds remove them before they appear.
+    spawnRoadObstacles(obstacles, { ...wave, y: game.van.y - CONFIG.obstacles.spawnLeadPx });
   };
 }
 
@@ -731,7 +735,7 @@ function frame(now) {
   const hornPressed = buttons.isPressed('horn');
 
   if (stepped) {
-    updateRoadObstacles(game, obstacles, step);
+    if (updateRoadObstacles(game, obstacles, step)) playVehicleHitSound();
     const pickupResult = updatePickups(game, pickups, step);
     if (pickupResult.coins > 0) drivingAudio?.playCoin(pickupResult.coins);
     if (pickupResult.coins > 0) {

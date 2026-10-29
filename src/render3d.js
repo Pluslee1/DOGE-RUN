@@ -20,7 +20,8 @@ const LANE_COUNT = 3;
 const DASH_LENGTH = 1.5;
 const DASH_GAP = 2.6;
 const DASH_PITCH = DASH_LENGTH + DASH_GAP;
-const DASHES_PER_LANE = 26;
+// Fill the complete visible road so lane markings do not stop at mid-distance.
+const DASHES_PER_LANE = Math.ceil(ROAD_LENGTH_WORLD / DASH_PITCH) + 2;
 const VAN_WHEEL_RADIUS = 0.42;
 
 const CAMERA = CONFIG.camera3D;
@@ -2064,7 +2065,7 @@ function buildRoad(gradientMap) {
   group.add(surface);
 
   const kerbMaterial = toonMaterial(0xf4f4f4, gradientMap);
-  for (const side of [1]) {
+  for (const side of [-1, 1]) {
     const kerb = new THREE.Mesh(new THREE.BoxGeometry(0.45, 0.36, ROAD_LENGTH_WORLD), kerbMaterial);
     kerb.position.set(side * (ROAD_HALF_WORLD + 0.22), 0.18, ROAD_START_Z + ROAD_LENGTH_WORLD / 2);
     group.add(kerb);
@@ -2097,6 +2098,14 @@ function buildRoad(gradientMap) {
   const dashGeometry = new THREE.BoxGeometry(0.22, 0.04, DASH_LENGTH);
   const lanes = [];
   const laneWidth = (ROAD_WIDTH_PX * PX_TO_WORLD) / LANE_COUNT;
+
+  const edgeLineMaterial = new THREE.MeshBasicMaterial({ color: 0xf2f2f2, toneMapped: false });
+  const edgeLineGeometry = new THREE.BoxGeometry(0.12, 0.035, ROAD_LENGTH_WORLD);
+  for (const side of [-1, 1]) {
+    const edgeLine = new THREE.Mesh(edgeLineGeometry, edgeLineMaterial);
+    edgeLine.position.set(side * (ROAD_HALF_WORLD - 0.16), 0.035, ROAD_START_Z + ROAD_LENGTH_WORLD / 2);
+    group.add(edgeLine);
+  }
 
   for (let lane = 0; lane < LANE_COUNT - 1; lane++) {
     const x = -ROAD_HALF_WORLD + laneWidth * (lane + 1);
@@ -2198,8 +2207,6 @@ function buildCityConditionEffects(camera) {
   petals.instanceMatrix.needsUpdate = true;
   camera.add(petals);
 
-  const roadworks = buildRoadworkViewProps(settings);
-  camera.add(roadworks);
   const market = buildMarketViewProps(settings);
   camera.add(market);
 
@@ -2246,13 +2253,10 @@ function buildCityConditionEffects(camera) {
         }
         petals.instanceMatrix.needsUpdate = true;
       }
-      roadworks.visible = condition === 'roadworks';
       market.visible = condition === 'market';
-      for (const props of [roadworks, market]) {
-        props.position.z += travelled;
-        if (props.position.z > -settings.minimumPropViewDistance) {
-          props.position.z -= props.userData.repeatDepth;
-        }
+      market.position.z += travelled;
+      if (market.position.z > -settings.minimumPropViewDistance) {
+        market.position.z -= market.userData.repeatDepth;
       }
     },
   };
@@ -2699,6 +2703,8 @@ function createTrafficCar(type, color, slotIndex = 0) {
   const danfo = type === 'danfo';
   const traffic = CONFIG.traffic;
   const dimensionsByType = {
+    suv: [traffic.vanWidth, traffic.vanDepth * 0.96, traffic.danfoBodyHeight * 0.86, traffic.danfoCabinHeight * 0.9],
+    hatchback: [traffic.carWidth * 0.92, traffic.carDepth * 0.9, traffic.sedanBodyHeight, traffic.sedanCabinHeight * 0.94],
     danfo: [traffic.danfoWidth, traffic.danfoDepth, traffic.danfoBodyHeight, traffic.danfoCabinHeight],
     sedan: [traffic.carWidth, traffic.carDepth, traffic.sedanBodyHeight, traffic.sedanCabinHeight],
     tanker: [traffic.tankerWidth, traffic.tankerDepth, traffic.sedanBodyHeight, traffic.sedanCabinHeight],
@@ -2718,6 +2724,8 @@ function createTrafficCar(type, color, slotIndex = 0) {
   });
   if (type === 'tanker') addTankerBody(stylized.group, width, length);
   if (type === 'truck') addTruckCargo(stylized.group, width, length, slotIndex);
+  if (type === 'suv') addTrafficRoofRails(stylized.group, width, length, traffic.utilityWheelRadius + bodyHeight + cabinHeight * 0.92);
+  if (type === 'hatchback') addHatchbackSpoiler(stylized.group, width, length, traffic.wheelRadius + bodyHeight + cabinHeight * 0.92);
   stylized.smokeEmitter = createCrashSmokeEmitter(CONFIG.crash.obstacleSmokeCount, CONFIG.crash.smokeColor, CONFIG.crash.smokeSpawnPerSecond);
   stylized.group.add(stylized.smokeEmitter.points);
   stylized.smokeEmitter.points.position.set(0, CONFIG.crash.smokeOriginY, length * CONFIG.crash.smokeOriginZRatio);
@@ -2725,6 +2733,44 @@ function createTrafficCar(type, color, slotIndex = 0) {
   stylized.group.add(stylized.impactBurst.group);
   stylized.group.userData.type = type;
   return stylized;
+}
+
+function addTrafficRoofRails(parent, width, length, roofY) {
+  const railMaterial = new THREE.MeshStandardMaterial({ color: 0xd5e0e4, metalness: 0.72, roughness: 0.26 });
+  const railLength = length * 0.58;
+  const railGeometry = new THREE.BoxGeometry(width * 0.055, 0.065, railLength);
+  for (const side of [-1, 1]) {
+    const rail = new THREE.Mesh(railGeometry, railMaterial);
+    rail.position.set(side * width * 0.34, roofY + 0.025, -length * 0.13);
+    rail.castShadow = true;
+    parent.add(rail);
+  }
+  const carrier = new THREE.Mesh(
+    new THREE.BoxGeometry(width * 0.58, 0.18, length * 0.32),
+    new THREE.MeshStandardMaterial({ color: 0x25323a, metalness: 0.18, roughness: 0.38 }),
+  );
+  carrier.position.set(0, roofY + 0.14, -length * 0.13);
+  carrier.castShadow = true;
+  parent.add(carrier);
+}
+
+function addHatchbackSpoiler(parent, width, length, roofY) {
+  const spoilerMaterial = new THREE.MeshStandardMaterial({ color: 0x242a30, metalness: 0.24, roughness: 0.48 });
+  const wing = new THREE.Mesh(new THREE.BoxGeometry(width * 0.78, 0.095, 0.16), spoilerMaterial);
+  wing.position.set(0, roofY, -length * 0.3);
+  wing.castShadow = true;
+  parent.add(wing);
+  const brakeLight = new THREE.Mesh(
+    new THREE.BoxGeometry(width * 0.62, 0.055, 0.04),
+    new THREE.MeshBasicMaterial({ color: 0xff3345, toneMapped: false }),
+  );
+  brakeLight.position.set(0, roofY - 0.12, -length * 0.31);
+  parent.add(brakeLight);
+  for (const side of [-1, 1]) {
+    const support = new THREE.Mesh(new THREE.BoxGeometry(0.045, 0.1, 0.05), spoilerMaterial);
+    support.position.set(side * width * 0.2, roofY - 0.075, -length * 0.3);
+    parent.add(support);
+  }
 }
 
 function createTrafficImpactBurst() {
@@ -2802,6 +2848,8 @@ function trafficColorForSlot(type, index) {
     tanker: [traffic.tankerCabColor],
     van: traffic.vanColors,
     truck: traffic.truckColors,
+    suv: traffic.suvColors,
+    hatchback: traffic.hatchbackColors,
   };
   const palette = palettes[type] || traffic.sedanColors;
   return palette[index % palette.length];
@@ -2883,6 +2931,7 @@ function createTrafficBike(frameColor) {
   const traffic = CONFIG.traffic;
   const visual = traffic.bikeVisual;
   const group = new THREE.Group();
+  group.scale.set(1.3, 1.25, 1.3);
   const frameMaterial = new THREE.MeshStandardMaterial({ color: frameColor, roughness: visual.bikeFrameRoughness, metalness: visual.bikeFrameMetalness });
   const tireMaterial = new THREE.MeshStandardMaterial({ color: visual.bikeTireColor, roughness: visual.bikeTireRoughness });
   const metalMaterial = new THREE.MeshStandardMaterial({ color: visual.bikeMetalColor, roughness: visual.bikeMetalRoughness, metalness: visual.bikeMetalness });
@@ -3028,12 +3077,14 @@ function buildBonePool() {
     const bone = new THREE.Group();
     const plus = new THREE.Group();
     const stem = new THREE.Mesh(stemGeometry, material);
-    stem.rotation.x = Math.PI / 2;
+    // Collectibles are viewed down the road (+Z), so their long axis must sit
+    // across the road (X) instead of pointing into the camera.
+    stem.rotation.z = Math.PI / 2;
     bone.add(stem);
     for (const end of [-1, 1]) {
       for (const side of [-1, 1]) {
         const knob = new THREE.Mesh(endGeometry, material);
-        knob.position.set(side * config.tipPairOffset, 0, end * config.tipOffset);
+        knob.position.set(end * config.tipOffset, 0, side * config.tipPairOffset);
         bone.add(knob);
       }
     }
@@ -3312,10 +3363,29 @@ function buildObstaclePool() {
   const baseMaterial = new THREE.MeshToonMaterial({ color: settings.coneBaseColor });
   const crateMaterial = new THREE.MeshToonMaterial({ color: settings.crateColor, gradientMap: makeToonGradient() });
   const tireMaterial = new THREE.MeshToonMaterial({ color: settings.tireColor });
+  const oilMaterial = new THREE.MeshStandardMaterial({
+    color: settings.oilSlickColor,
+    roughness: 0.12,
+    metalness: 0.55,
+    transparent: true,
+    opacity: 0.94,
+    side: THREE.DoubleSide,
+  });
+  const oilHighlightMaterial = new THREE.MeshBasicMaterial({
+    color: settings.oilHighlightColor,
+    transparent: true,
+    opacity: 0.62,
+    depthWrite: false,
+    toneMapped: false,
+  });
+  const potholeRimMaterial = new THREE.MeshToonMaterial({ color: settings.potholeRimColor });
+  const potholeInnerMaterial = new THREE.MeshBasicMaterial({ color: settings.potholeInnerColor, toneMapped: false });
   const coneGeometry = new THREE.ConeGeometry(settings.coneRadius, settings.coneHeight, settings.segments);
   const baseGeometry = new THREE.CylinderGeometry(settings.coneRadius * 1.45, settings.coneRadius * 1.6, settings.coneBaseHeight, settings.segments);
   const crateGeometry = new THREE.BoxGeometry(...settings.crateSize);
   const tireGeometry = new THREE.TorusGeometry(settings.tireRadius, settings.tireTubeRadius, settings.segments, settings.segments * 2);
+  const circleGeometry = new THREE.CircleGeometry(1, 20);
+  const potholeRimGeometry = new THREE.RingGeometry(0.7, 1, 12);
   const views = [];
 
   for (let index = 0; index < settings.poolSize; index++) {
@@ -3330,7 +3400,27 @@ function buildObstaclePool() {
     const tire = new THREE.Mesh(tireGeometry, tireMaterial);
     tire.rotation.x = Math.PI / 2;
     tire.position.y = settings.tireRadius * 0.55;
-    for (const mesh of [base, cone, crate, tire]) {
+    const oilSlick = new THREE.Group();
+    const oilPool = new THREE.Mesh(circleGeometry, oilMaterial);
+    oilPool.rotation.x = -Math.PI / 2;
+    oilPool.scale.set(settings.oilSlickWidth * PX_TO_WORLD / 2, settings.oilSlickDepth * PX_TO_WORLD / 2, 1);
+    oilPool.position.y = 0.018;
+    oilSlick.add(oilPool);
+    const oilGlint = new THREE.Mesh(new THREE.PlaneGeometry(settings.oilSlickWidth * PX_TO_WORLD * 0.42, 0.11), oilHighlightMaterial);
+    oilGlint.rotation.x = -Math.PI / 2;
+    oilGlint.position.set(-0.12, 0.027, 0.04);
+    oilSlick.add(oilGlint);
+    const pothole = new THREE.Group();
+    const potholeRim = new THREE.Mesh(potholeRimGeometry, potholeRimMaterial);
+    potholeRim.rotation.x = -Math.PI / 2;
+    potholeRim.scale.set(settings.potholeWidth * PX_TO_WORLD / 2, settings.potholeDepth * PX_TO_WORLD / 2, 1);
+    potholeRim.position.y = 0.018;
+    const potholeInner = new THREE.Mesh(circleGeometry, potholeInnerMaterial);
+    potholeInner.rotation.x = -Math.PI / 2;
+    potholeInner.scale.set(settings.potholeWidth * PX_TO_WORLD * 0.35, settings.potholeDepth * PX_TO_WORLD * 0.35, 1);
+    potholeInner.position.y = 0.02;
+    pothole.add(potholeRim, potholeInner);
+    for (const mesh of [base, cone, crate, tire, oilPool, oilGlint, potholeRim, potholeInner]) {
       mesh.castShadow = true;
       mesh.receiveShadow = true;
     }
@@ -3339,7 +3429,9 @@ function buildObstaclePool() {
     variants.cone = coneGroup;
     variants.crate = crate;
     variants.tire = tire;
-    holder.add(coneGroup, crate, tire);
+    variants.oilSlick = oilSlick;
+    variants.pothole = pothole;
+    holder.add(coneGroup, crate, tire, oilSlick, pothole);
     holder.visible = false;
     group.add(holder);
     views.push({ id: null, holder, variants });

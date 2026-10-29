@@ -6,8 +6,8 @@ export const CONFIG = {
   logicalWidth: 480,
   logicalHeight: 800,
   render: {
-    maxPixelRatio: 1.5, // RESOLVED — render sharper on high-DPI displays
-    lowPowerPixelRatio: 1.0, // RESOLVED — retain crisp native-resolution rendering on phones
+    maxPixelRatio: 1.75, // Render finer vehicle and road edges on desktop and high-DPI displays
+    lowPowerPixelRatio: 1.15, // Keep mobile rendering crisp while capping GPU cost
     lowPowerThreadCount: 2, // RESOLVED — reserve reduced resolution for very limited CPUs
     lowPowerMemoryGb: 2, // RESOLVED — reserve reduced resolution for very limited memory
     lowPowerShadows: true, // RESOLVED — preserve depth and shape detail on phones
@@ -214,6 +214,8 @@ export const CONFIG = {
     seedSalt: 0xc2b2ae35, // RESOLVED — keeps obstacle patterns independent from traffic and dog spawning
     waveSeedMultiplier: 65537, // RESOLVED — deterministic per-wave obstacle layout
     spawnChance: 0.56, // RESOLVED — occasional small hazards keep the road readable
+    spawnChanceAtFullDifficulty: 0.9, // Later runs get hazards on most waves with an open escape lane
+    spawnLeadPx: 1100, // Show hazards at the far road entrance and leave time to react
     yOffset: -80, // RESOLVED — leave warning room before each traffic wave
     poolSize: 24, // RESOLVED — pooled meshes for visible hazards
     width: 48, // RESOLVED — compact obstacle footprint inside one lane
@@ -232,6 +234,24 @@ export const CONFIG = {
     tireRadius: 0.2, // RESOLVED — small road tyre obstacle
     tireTubeRadius: 0.065, // RESOLVED — tyre ring thickness
     tireColor: 0x24282b, // RESOLVED — dark rubber tyre color
+    oilSlickWidth: 72, // Readable while staying within one lane
+    oilSlickDepth: 84, // Elongated patch gives the player time to react
+    oilSlickSeconds: 4.5, // Steering stays loose briefly after driving through oil
+    oilSlideMultiplier: 3.2, // Lane changes are clearly slower while traction is low
+    oilImpactSeconds: 1.8, // Hold the impact shake long enough to register
+    oilDriftSeconds: 0.9, // Brief sideways skid that remains within steering control
+    oilDriftDistance: 30, // Move toward the neighboring lane without forcing a full lane change
+    oilHitShake: 0.34, // Strong camera jolt on direct oil contact
+    oilSlickColor: 0x17232c, // Glossy blue-black oil stands out on asphalt
+    oilHighlightColor: 0x9bc4ce, // Pale reflections make the oil readable
+    potholeWidth: 72, // Avoidable single-lane pothole footprint
+    potholeDepth: 72,
+    potholeSlowSeconds: 1.6, // Keep the van slowed after a direct pothole hit
+    potholeSpeedMultiplier: 0.62, // Restrict speed while recovering, including with gas held
+    potholeSpeedLoss: 320, // Immediate speed drop makes the hit noticeable
+    potholeHitShake: 0.2, // Give pothole impacts a clear visual jolt
+    potholeRimColor: 0x756957, // Broken asphalt edge around the depression
+    potholeInnerColor: 0x111416, // Dark center makes the pothole read clearly
     segments: 10, // RESOLVED — low-poly hazard geometry detail
     crateRoughness: 0.84, // RESOLVED — matte wooden crate finish
   },
@@ -314,8 +334,8 @@ export const CONFIG = {
     marketPostYOffsetRatio: 0.42, // RESOLVED — center posts between counter and canopy
     roadworkViewDistance: 31, // RESOLVED — place warning props in front of the van
     roadworkViewHeight: -5, // RESOLVED — keep props low in the chase-camera view
-    roadworkSignXRatio: 0.6, // RESOLVED — keep the work warning sign beside the driving line
-    roadworkRoadEdgeRatio: 0.84, // RESOLVED — place cones near the road edge where they remain visible
+    roadworkSignXRatio: 1.38, // Keep the warning sign beyond the road edge
+    roadworkRoadEdgeRatio: 1.38, // Keep work barriers and cones fully off the drivable road
     marketViewDistance: 34, // RESOLVED — stage market stalls farther ahead than the van
     marketRepeatDepth: 42, // RESOLVED — repeat stalls through the busy market stretch
     marketRoadEdgeRatio: 0.92, // RESOLVED — keep market canopies visible while favoring the road edge
@@ -333,6 +353,7 @@ export const CONFIG = {
     rescueMessage: 'WOOF! SAFE!', // RESOLVED — celebrate every rescued dog
     collisionMessage: 'WATCH OUT!', // RESOLVED — warn after a traffic impact
     shieldMessage: 'NICE SAVE!', // RESOLVED — celebrate a shielded collision
+    oilSlickMessage: 'SLIPPERY ROAD!', // Warn when oil reduces steering grip
     jumpMessage: 'WHEE!', // RESOLVED — react to a successful jump
     hornMessage: 'KABOSU SAYS WOOF!', // RESOLVED — acknowledge the horn
     marketMessage: 'BUSY MARKET!', // RESOLVED — announce a lively market stretch
@@ -826,11 +847,11 @@ export const CONFIG = {
     danfoWidth: 108, // RESOLVED — yellow Danfo logical width
     danfoDepth: 145, // RESOLVED — yellow Danfo logical length
     danfoColor: 0xffc928, // RESOLVED — Danfo yellow body color
-    vehicleTypeWeights: { danfo: 0.2, sedan: 0.13, bike: 0.23, tanker: 0.2, van: 0.14, truck: 0.1 }, // RESOLVED — fuel tankers appear regularly among mixed Lagos traffic
+    vehicleTypeWeights: { danfo: 0.14, sedan: 0.11, bike: 0.18, tanker: 0.14, van: 0.1, truck: 0.08, suv: 0.16, hatchback: 0.09 }, // Frequently mix clear compact, family, utility, and commercial traffic silhouettes
     tankerGuaranteedEveryWaves: 4, // RESOLVED — guarantee a tanker in the opening traffic and every fourth wave
-    bikeWidth: 48, // RESOLVED — motorcycle with rider and rear passenger fits inside a lane
-    bikeDepth: 88, // RESOLVED — motorcycle footprint including both passengers
-    bikeWheelRadius: 0.19, // RESOLVED — motorcycle wheel size
+    bikeWidth: 64, // Larger motorcycle hitbox and wheels stay aligned with the clearer silhouette
+    bikeDepth: 108, // Include the enlarged bike and both riders in traffic spacing
+    bikeWheelRadius: 0.23, // Larger wheels improve visibility from the chase camera
     bikeFrameColor: 0x242a2e, // RESOLVED — dark motorcycle frame
     bikeSeatColor: 0x46362c, // RESOLVED — motorcycle seat
     bikeRiderColors: [0x247b53, 0x2e5c9a, 0x9b3d32, 0xc78b28], // RESOLVED — rider clothing palette
@@ -929,6 +950,8 @@ export const CONFIG = {
       cargoCabHeight: 1.05, // RESOLVED — box truck cab height used for cargo placement
     },
     sedanColors: [0xbec4ca, 0x202329, 0xf3f3ed], // RESOLVED — corporate sedan body colors
+    suvColors: [0x315d72, 0x52634a, 0x9b583b], // Bold colors for taller family SUVs
+    hatchbackColors: [0xd7a833, 0x3b7c80, 0x8c526f], // Bright compact-car colors improve road readability
     sedanBodyHeight: 0.72, // RESOLVED — sedan body height in world units
     sedanCabinHeight: 0.47, // RESOLVED — sedan cabin height in world units
     danfoBodyHeight: 1.05, // RESOLVED — Danfo body height in world units
@@ -955,16 +978,16 @@ export const CONFIG = {
     glassRoughness: 0.32, // RESOLVED — traffic glazing roughness
     bodyRoughness: 0.48, // RESOLVED — traffic body material roughness
     gapSeconds: 2.0, // RESOLVED — tighter early wave spacing keeps more traffic on the road
-    gapSecondsAtFullDifficulty: 1.6, // RESOLVED — denser late-run waves raise the challenge steadily
+    gapSecondsAtFullDifficulty: 1.2, // Tighten late traffic spacing as the run progresses
     difficultyStartMeters: 800, // RESOLVED — early stretch remains forgiving
     difficultyFullMeters: 12000, // RESOLVED — traffic density reaches its cap gradually
-    extraLaneChanceAtFullDifficulty: 0.65, // RESOLVED — most late waves use two lanes while preserving one open lane
-    spawnLeadPx: 2700, // RESOLVED — bring traffic in at the top edge of the main camera road view
-    firstWaveLeadPx: 2700, // RESOLVED — first cars enter near the visible road horizon
+    extraLaneChanceAtFullDifficulty: 0.9, // Most late waves use two lanes and leave one open
+    spawnLeadPx: 6000, // Bring traffic in from just before the far road edge
+    firstWaveLeadPx: 6000, // Start the first traffic wave at the far road entrance
     waveDepthSpreadPx: 220, // RESOLVED — stagger cars within a wave so traffic does not pop in as a row
-    approachBufferPx: 2800, // RESOLVED — retain cars before they enter the camera's visible road
-    jumpOvertakeRangePx: 460, // RESOLVED — start the jump pass when a car is close enough to clear
-    jumpOvertakeBoostPxPerSecond: 460, // RESOLVED — carry the van ahead of a long vehicle before landing
+    approachBufferPx: 6500, // Retain distant traffic until it reaches the camera's road horizon
+    jumpOvertakeRangePx: 460, // Start the jump pass with enough room to clear the full vehicle
+    jumpPassMinimumRelativeSpeedPxPerSecond: 700, // Guarantee a complete pass before the landing frame
     minSameLaneSpacing: 260, // RESOLVED — preserve room for long tankers and trucks in one lane
     blockedLanesMin: 1,
     blockedLanesMax: 2, // RESOLVED — later waves may use two lanes while keeping one open
@@ -980,6 +1003,7 @@ export const CONFIG = {
 
   // RESOLVED #1: bones, placed in the guaranteed gap of each traffic wave.
   bones: {
+    spawnLeadPx: 420, // RESOLVED — place each treat trail inside the chase camera's visible road
     length: 20,
     thickness: 9,
     yOffset: 12,

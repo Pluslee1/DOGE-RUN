@@ -73,6 +73,7 @@ export function drawHud(ctx, game, dogs = null) {
   drawDistanceCard(ctx, game);
   drawTaskDisplay(ctx, game);
   drawResourceCard(ctx, game);
+  drawHazardStatus(ctx, game);
   drawInfoCard(
     ctx,
     CONFIG.hud.topBarRightX,
@@ -117,6 +118,26 @@ export function drawHud(ctx, game, dogs = null) {
   }
 
   if (DEBUG) drawDebugInfo(ctx, game, dogs);
+  ctx.textAlign = 'left';
+}
+
+function drawHazardStatus(ctx, game) {
+  if (game.slipperyTimer <= 0 && game.potholeTimer <= 0) return;
+  const oilActive = game.slipperyTimer > 0;
+  const seconds = Math.ceil(oilActive ? game.slipperyTimer : game.potholeTimer);
+  const oilImpacting = game.oilImpactTimer > 0;
+  const label = oilActive
+    ? oilImpacting ? 'OIL HIT · VAN SLIDING!' : `LOW GRIP · ${seconds}s`
+    : `POTHOLE HIT · SLOWED ${seconds}s`;
+  const width = oilActive ? 190 : 224;
+  const x = (CONFIG.logicalWidth - width) / 2;
+  const y = 132;
+  drawPanel(ctx, x, y, width, 32, 'rgba(11,17,31,0.92)', oilActive ? oilImpacting ? 'rgba(255,120,92,0.95)' : 'rgba(243,185,50,0.9)' : 'rgba(255,120,92,0.9)');
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillStyle = oilActive && !oilImpacting ? CONFIG.palette.vanAccent : '#ff9a83';
+  ctx.font = '900 12px "Segoe UI", system-ui, sans-serif';
+  ctx.fillText(label, CONFIG.logicalWidth / 2, y + 16, width - 14);
   ctx.textAlign = 'left';
 }
 
